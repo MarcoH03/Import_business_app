@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <title>Import Business</title>
+  <meta name="description" content="Encargos de compras por internet con envío a Cuba, remesas, dinero en tarjeta y efectivo, gastos y cierre del día.">
+  <meta name="theme-color" content="#f8f9ff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#111318" media="(prefers-color-scheme: dark)">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Import">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <script>
+    // Diseño según el teléfono: estilo iOS en iPhone/iPad y Material en Android (se puede cambiar en Ajustes o con ?ui=ios|android).
+    (function () {
+      var h = document.documentElement, o = 'auto', t = 'auto';
+      try { o = localStorage.getItem('ib-ui') || 'auto'; t = localStorage.getItem('ib-theme') || 'auto'; } catch (e) {}
+      var q = new URLSearchParams(location.search).get('ui');
+      if (q === 'ios' || q === 'android') o = q;
+      var ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      h.classList.add(o === 'ios' || o === 'android' ? o : ios ? 'ios' : 'android');
+      if (t === 'light' || t === 'dark') h.dataset.theme = t;
+    })();
+  </script>
+  <link rel="preload" href="fonts/roboto-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/app.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <div id="app"></div>
+  <noscript>Esta aplicación necesita JavaScript.</noscript>
+</body>
+</html>

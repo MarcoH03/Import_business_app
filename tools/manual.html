@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Manual de uso · Import Business</title>
+<style>
+  @font-face { font-family: 'Roboto'; font-weight: 400; src: url(../fonts/roboto-latin-400-normal.woff2) format('woff2'); }
+  @font-face { font-family: 'Roboto'; font-weight: 500; src: url(../fonts/roboto-latin-500-normal.woff2) format('woff2'); }
+  @font-face { font-family: 'Roboto'; font-weight: 700; src: url(../fonts/roboto-latin-700-normal.woff2) format('woff2'); }
+  @page { size: A4; margin: 15mm 15mm 17mm; }
+  :root { --ink: #191c20; --muted: #5a5e66; --line: #dde0e8; --blue: #1f5fa8; --soft: #eef2fa; --orange: #e0861c; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Roboto', Arial, sans-serif; color: var(--ink); font-size: 10.4pt; line-height: 1.5; margin: 0; }
+  h1, h2, h3 { line-height: 1.2; font-weight: 500; }
+  h2 { font-size: 19pt; margin: 0 0 4mm; break-after: avoid; }
+  h2 .n { color: var(--blue); margin-right: 6px; }
+  h3 { font-size: 12.5pt; margin: 6mm 0 2mm; break-after: avoid; color: var(--blue); }
+  p { margin: 0 0 2.6mm; }
+  ul, ol { margin: 0 0 3mm; padding-left: 6mm; }
+  li { margin-bottom: 1.2mm; }
+  b { font-weight: 500; }
+  section { break-before: page; }
+  section.cont { break-before: auto; margin-top: 8mm; }
+  figure { width: 41mm; margin: 0; text-align: center; break-inside: avoid; }
+  figure img { width: 100%; border-radius: 5mm; border: 1.3mm solid #1c1c1c; box-shadow: 0 2mm 5mm rgba(0,0,0,.12); display: block; }
+  figure.ios img { border-radius: 6mm; }
+  figcaption { font-size: 8pt; color: var(--muted); margin-top: 1.6mm; line-height: 1.3; }
+  figcaption .os { display: inline-block; font-weight: 700; font-size: 7pt; letter-spacing: .4px; text-transform: uppercase; padding: 0 1.6mm; border-radius: 1.2mm; margin-right: 1mm; color: #fff; }
+  .os.a { background: #3ddc84; color: #073b1c; } .os.i { background: #111; }
+  .split { display: grid; grid-template-columns: 1fr 87mm; gap: 6mm; align-items: start; margin-bottom: 4mm; }
+  .split .txt > :first-child { margin-top: 0; }
+  .pair { display: flex; gap: 5mm; justify-content: flex-end; break-inside: avoid; }
+  .row figure { width: 38mm; }
+  .row { display: flex; gap: 5mm; justify-content: center; margin: 4mm 0; break-inside: avoid; flex-wrap: wrap; }
+  .tip, .warn, .note { border-radius: 3mm; padding: 3mm 4mm; margin: 3mm 0 4mm; break-inside: avoid; }
+  .tip { background: #e2f5e6; border-left: 1.2mm solid #2e9b4f; }
+  .warn { background: #fff1db; border-left: 1.2mm solid var(--orange); }
+  .note { background: #e6eeff; border-left: 1.2mm solid var(--blue); }
+  .tip > b:first-child, .warn > b:first-child, .note > b:first-child { display: block; margin-bottom: 1mm; }
+  table { border-collapse: collapse; width: 100%; margin: 2mm 0 4mm; font-size: 9.6pt; break-inside: avoid; }
+  th, td { text-align: left; padding: 1.7mm 2.3mm; border-bottom: 0.3mm solid var(--line); vertical-align: top; }
+  th { background: var(--soft); font-weight: 500; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .k { display: inline-block; padding: 0 2mm; border-radius: 1.5mm; background: var(--soft); border: 0.3mm solid var(--line); font-weight: 500; font-size: 9.3pt; white-space: nowrap; }
+  .steps { counter-reset: s; list-style: none; padding-left: 0; }
+  .steps > li { counter-increment: s; position: relative; padding-left: 8.5mm; margin-bottom: 2.2mm; }
+  .steps > li::before { content: counter(s); position: absolute; left: 0; top: 0.2mm; width: 6mm; height: 6mm; border-radius: 50%; background: var(--blue); color: #fff; font-weight: 700; font-size: 8.5pt; display: grid; place-items: center; }
+  pre { background: var(--soft); border-radius: 3mm; padding: 3mm 4mm; font-family: inherit; font-size: 8.6pt; line-height: 1.38; white-space: pre-wrap; margin: 2mm 0 4mm; break-inside: avoid; }
+  .formula { font-variant-numeric: tabular-nums; background: var(--soft); border-radius: 2mm; padding: 2.4mm 3.5mm; display: block; margin: 1.5mm 0 3mm; font-weight: 500; }
+  .cover { height: 262mm; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; padding: 0 6mm; break-after: page; }
+  .cover img.logo { width: 30mm; border-radius: 7mm; box-shadow: 0 3mm 8mm rgba(0,0,0,.2); }
+  .cover h1 { font-size: 38pt; margin: 8mm 0 2mm; font-weight: 400; }
+  .cover .sub { font-size: 14pt; color: var(--muted); margin-bottom: 8mm; }
+  .cover .meta { font-size: 9.6pt; color: var(--muted); border-top: 0.3mm solid var(--line); padding-top: 4mm; width: 100%; margin-top: 8mm; }
+  .toc { columns: 2; column-gap: 10mm; padding-left: 5mm; }
+  .toc li { break-inside: avoid; }
+  .faq dt { font-weight: 500; margin-top: 3mm; break-after: avoid; }
+  .faq dd { margin: 1mm 0 0 0; color: #2b2f36; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; }
+  .badge { display: inline-block; font-size: 8pt; font-weight: 700; padding: 0 1.8mm; border-radius: 1.4mm; background: #dae2f9; color: var(--blue); vertical-align: 1px; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <img class="logo" src="../icons/icon-512.png" alt="">
+  <h1>Import Business</h1>
+  <div class="sub">Manual de uso · Android y iPhone</div>
+  <p style="max-width:150mm">La app del negocio de <b>encargos de compras por internet con envío a Cuba</b> y de <b>remesas</b>: lleva cada encargo desde que se compra hasta que se entrega, calcula su precio con las libras, cuenta el dinero de la <b>tarjeta en EE. UU.</b> y del <b>efectivo en Cuba</b>, anota gastos y pagos a trabajadores, separa la ganancia de cada negocio y hace el <b>cierre del día</b>. Funciona sin internet y, si quieren, sincroniza los teléfonos de todo el equipo.</p>
+  <div class="row" style="justify-content:flex-start;margin-top:5mm">
+    <figure><img src="../preview/android/01-inicio.png" alt=""><figcaption><span class="os a">Android</span>Inicio</figcaption></figure>
+    <figure class="ios"><img src="../preview/ios/10-encargos.png" alt=""><figcaption><span class="os i">iPhone</span>Encargos</figcaption></figure>
+    <figure><img src="../preview/android/51-informes-negocios.png" alt=""><figcaption><span class="os a">Android</span>Informes</figcaption></figure>
+  </div>
+  <div class="meta">Versión 1.0 · Dirección de la app: <b>https://marcoh03.github.io/Import_business_app/</b><br>Las capturas usan datos inventados.</div>
+</div>
+
+<section style="break-before:auto">
+  <h2>Contenido</h2>
+  <ol class="toc">
+    <li>Qué hace la app</li>
+    <li>Instalarla en Android y en iPhone</li>
+    <li>Primer uso</li>
+    <li>La pantalla de Inicio</li>
+    <li>Encargos: anotar uno nuevo</li>
+    <li>Cómo se calcula el precio</li>
+    <li>Seguir un encargo hasta entregarlo</li>
+    <li>Clientes</li>
+    <li>Remesas</li>
+    <li>Dinero: tarjeta, efectivo, gastos y trabajadores</li>
+    <li>Informes y ganancia de cada negocio</li>
+    <li>Cierre del día</li>
+    <li>Avisos de llegada</li>
+    <li>Sincronizar los teléfonos (beta)</li>
+    <li>Copias de seguridad</li>
+    <li>Ajustes</li>
+    <li>Preguntas frecuentes</li>
+  </ol>
+
+  <section class="cont">
+    <h2><span class="n">1</span>Qué hace la app</h2>
+    <table>
+      <tr><th style="width:36mm">Parte</th><th>Para qué sirve</th></tr>
+      <tr><td><b>Encargos</b></td><td>Quién pidió qué (nombre y teléfono), qué se compró, en qué tienda, cuánto costó, cuánto pesa y por dónde va: <i>comprado → almacén → enviado a Cuba → en Cuba → entregado</i>. Calcula el precio, la ganancia, lo que falta por cobrar y los días que tarda cada tramo.</td></tr>
+      <tr><td><b>Remesas</b></td><td>Alguien transfiere a la tarjeta de EE. UU. con un % por encima y aquí se entrega el efectivo. Guarda la dirección y el teléfono de quien recibe y, al entregar, pasa el dinero del efectivo a la tarjeta.</td></tr>
+      <tr><td><b>Dinero</b></td><td>Saldo de la <b>tarjeta EE. UU.</b> y del <b>efectivo en Cuba</b>, calculado con todo lo anotado. Gastos del negocio y pagos a trabajadores.</td></tr>
+      <tr><td><b>Informes</b></td><td>Ganancia neta de <b>encargos</b> y de <b>remesas</b> por separado y juntas, dinero que entró en cada cuenta y tiempos de llegada por tienda.</td></tr>
+      <tr><td><b>Cierre del día</b></td><td>Ganancia del día, dinero que entró, efectivo esperado contra el contado y todo lo que está por llegar o por entregar. Se comparte por WhatsApp.</td></tr>
+      <tr><td><b>Sincronizar</b> <span class="badge">BETA</span></td><td>Opcional: junta los cambios de los teléfonos del equipo para que todos vean el mismo dinero y los mismos pendientes.</td></tr>
+    </table>
+    <div class="note"><b>El diseño se adapta al teléfono</b>En Android la app tiene el estilo de Android (Material) y en iPhone el estilo de iOS: botones, menús, avisos y gestos como los de cada sistema. Todo funciona igual en los dos. En este manual verás cada pantalla en las dos versiones.</div>
+    <div class="tip"><b>Los datos están en el teléfono</b>Todo se guarda en el propio teléfono y la app funciona sin internet. GitHub solo aloja la app. Si activan la sincronización, se guarda además una copia <b>cifrada</b> compartida (capítulo 14).</div>
+  </section>
+</section>
+
+<section>
+  <h2><span class="n">2</span>Instalarla en el teléfono</h2>
+  <div class="two">
+    <div>
+      <h3 style="margin-top:0">Android (Chrome)</h3>
+      <ol class="steps">
+        <li>Abre <b>https://marcoh03.github.io/Import_business_app/</b> en <b>Google Chrome</b>.</li>
+        <li>Toca <span class="k">Instalar aplicación</span> si aparece abajo, o el menú <span class="k">⋮</span> → <span class="k">Instalar aplicación</span> / <span class="k">Añadir a pantalla de inicio</span>.</li>
+        <li>Ábrela siempre desde el icono. Desde entonces funciona sin internet.</li>
+      </ol>
+    </div>
+    <div>
+      <h3 style="margin-top:0">iPhone (Safari)</h3>
+      <ol class="steps">
+        <li>Abre la misma dirección en <b>Safari</b> (en otros navegadores del iPhone no se puede instalar).</li>
+        <li>Toca el botón <span class="k">Compartir</span> (el cuadrado con la flecha hacia arriba) → <span class="k">Añadir a pantalla de inicio</span> → <span class="k">Añadir</span>.</li>
+        <li>Ábrela siempre desde el icono.</li>
+      </ol>
+    </div>
+  </div>
+  <p>Si la abres en el navegador sin instalar, Inicio muestra el aviso <b>Instala la app</b>; también está en <span class="k">Ajustes → Instalar en el teléfono</span>, que explica los pasos de tu teléfono.</p>
+  <div class="row">
+    <figure><img src="../preview/android/80-instalar.png" alt=""><figcaption><span class="os a">Android</span>Pasos para instalar</figcaption></figure>
+    <figure class="ios"><img src="../preview/ios/80-instalar.png" alt=""><figcaption><span class="os i">iPhone</span>Pasos para instalar</figcaption></figure>
+  </div>
+  <div class="tip"><b>Actualizaciones</b>Cuando se publica una versión nueva, la app muestra «Hay una nueva versión. Toca para actualizar». Tus datos se conservan.</div>
+
+  <section class="cont">
+    <h2><span class="n">3</span>Primer uso</h2>
+    <div class="split">
+      <div class="txt">
+        <p>La primera vez la app pide:</p>
+        <ul>
+          <li><b>Tu nombre</b>: aparece en lo que anotas, para saber quién hizo cada cambio.</li>
+          <li><b>Cobro por libra</b> (lo que paga el cliente) y <b>lo que nos cuesta la libra</b> (lo que cobra la agencia por llevarla a Cuba).</li>
+          <li><b>Comisión de las remesas</b> por defecto (por ejemplo 1%).</li>
+          <li><b>El dinero que hay ahora</b> en la tarjeta y en efectivo, para que los saldos empiecen bien.</li>
+        </ul>
+        <p>Toca <span class="k">Empezar</span>. Todo se puede cambiar después en Ajustes.</p>
+        <div class="note"><b>¿Ya lo usan en otro teléfono?</b>Toca <span class="k">Ya lo usamos en otro teléfono: unirme</span> y pega el código del grupo (capítulo 14). Así te bajas los datos del equipo.</div>
+      </div>
+      <div class="pair">
+        <figure><img src="../preview/android/00-bienvenida.png" alt=""><figcaption><span class="os a">Android</span>Bienvenida</figcaption></figure>
+        <figure class="ios"><img src="../preview/ios/00-bienvenida.png" alt=""><figcaption><span class="os i">iPhone</span>Bienvenida</figcaption></figure>
+      </div>
+    </div>
+  </section>
+</section>
+
+<section>
+  <h2><span class="n">4</span>La pantalla de Inicio</h2>
+  <div class="split">
+    <div class="txt">
+      <p>De arriba abajo:</p>
+      <ul>
+        <li><b>Tarjeta, Efectivo y Total</b>: el dinero que hay ahora. Toca para ir a Dinero.</li>
+        <li><b>Accesos rápidos</b>: nuevo <b>Encargo</b>, nueva <b>Remesa</b>, <b>Gasto</b> y <b>Cierre</b>.</li>
+        <li><b>Atrasados</b> (en rojo): encargos que ya debían haber llegado al almacén o a Cuba.</li>
+        <li><b>Llegan pronto</b>: lo que llega en los próximos días (2 por defecto; se cambia en Ajustes).</li>
+        <li><b>Pendiente</b>: encargos en Cuba para entregar, remesas por entregar (avisa si el efectivo no alcanza), encargos en el almacén sin enviar y lo que deben los clientes.</li>
+        <li><b>Hoy</b>: ganancia neta y dinero que entró hoy.</li>
+        <li>El botón del <b>cierre del día</b> y el resumen de <b>este mes</b> por negocio.</li>
+      </ul>
+      <p>Abajo están las 5 pestañas: <b>Inicio, Encargos, Remesas, Dinero e Informes</b>. La de Remesas muestra en rojo cuántas faltan por entregar. El engranaje de arriba abre los <b>Ajustes</b>.</p>
+    </div>
+    <div class="pair">
+      <figure><img src="../preview/android/01-inicio.png" alt=""><figcaption><span class="os a">Android</span>Inicio</figcaption></figure>
+      <figure class="ios"><img src="../preview/ios/01-inicio.png" alt=""><figcaption><span class="os i">iPhone</span>Inicio</figcaption></figure>
+    </div>
+  </div>
+  <div class="row">
+    <figure><img src="../preview/android/02-inicio-abajo.png" alt=""><figcaption><span class="os a">Android</span>Pendiente, hoy y el mes</figcaption></figure>
+    <figure class="ios"><img src="../preview/ios/02-inicio-abajo.png" alt=""><figcaption><span class="os i">iPhone</span>Pendiente, hoy y el mes</figcaption></figure>
+    <figure><img src="../preview/android/70-inicio-oscuro.png" alt=""><figcaption><span class="os a">Android</span>Modo oscuro</figcaption></figure>
+    <figure class="ios"><img src="../preview/ios/70-inicio-oscuro.png" alt=""><figcaption><span class="os i">iPhone</span>Modo oscuro</figcaption></figure>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">5</span>Encargos: anotar uno nuevo</h2>
+  <div class="split">
+    <div class="txt">
+      <p>En la pestaña <b>Encargos</b> está la lista con filtros: <i>Activos, Por comprar, Hacia el almacén, En el almacén, Hacia Cuba, En Cuba, Deben dinero, Entregados, Cancelados y Todos</i>. El buscador encuentra por nombre, teléfono, producto, nº de pedido o de seguimiento.</p>
+      <p>Cada encargo muestra el cliente, lo que es, la tienda, <b>cuándo llega</b> y lo que <b>debe</b>.</p>
+      <p>Para uno nuevo toca <span class="k">+ Nuevo encargo</span> (abajo a la derecha en Android) o <span class="k">+</span> (arriba a la derecha en iPhone).</p>
+    </div>
+    <div class="pair">
+      <figure><img src="../preview/android/10-encargos.png" alt=""><figcaption><span class="os a">Android</span>Lista de encargos</figcaption></figure>
+      <figure class="ios"><img src="../preview/ios/10-encargos.png" alt=""><figcaption><span class="os i">iPhone</span>Lista de encargos</figcaption></figure>
+    </div>
+  </div>
+  <h3>Rellenar el encargo</h3>
+  <ol class="steps">
+    <li><b>Cliente</b>: nombre y/o teléfono. <span class="k">Elegir uno anterior</span> rellena los datos de un cliente que ya pidió algo.</li>
+    <li><b>Productos</b>: qué es, el <b>precio que pagaste</b> en la tienda (con impuestos y envío hasta el almacén), la cantidad y, si quieres, el enlace. <span class="k">+ Otro producto</span> añade más.</li>
+    <li><b>Tienda y seguimiento</b>: Amazon, SHEIN, Temu… el nº de pedido y el <b>nº de seguimiento</b>. La app reconoce si es de UPS, USPS, FedEx, DHL o Amazon.</li>
+    <li><b>Estado</b>: normalmente <i>Comprado</i> (o <i>Por comprar</i> si aún no lo compraste) y la fecha de compra.</li>
+    <li><b>Llegada prevista al almacén</b>: escribe la que da la tienda o toca <span class="k">Pegar la fecha que da la tienda</span> (copia antes el texto «Arriving Tuesday, October 14», «Llega el 14 de oct.»…). Si la dejas vacía, la app la calcula con lo que suele tardar esa tienda.</li>
+    <li><b>Peso y precio</b>: el peso (aproximado al principio; el real se pone cuando llega al almacén) y el cobro por libra.</li>
+    <li><b>Pagos</b>: con qué se pagó la compra y el envío (tarjeta por defecto) y, si el cliente dejó dinero adelantado, cuánto.</li>
+  </ol>
+  <div class="row">
+    <figure><img src="../preview/android/11-nuevo-encargo.png" alt=""><figcaption><span class="os a">Android</span>Nuevo encargo</figcaption></figure>
+    <figure class="ios"><img src="../preview/ios/11-nuevo-encargo.png" alt=""><figcaption><span class="os i">iPhone</span>Nuevo encargo</figcaption></figure>
+    <figure><img src="../preview/android/12-nuevo-encargo-precio.png" alt=""><figcaption><span class="os a">Android</span>Precio calculado</figcaption></figure>
+    <figure class="ios"><img src="../preview/ios/12-nuevo-encargo-precio.png" alt=""><figcaption><span class="os i">iPhone</span>Precio calculado</figcaption></figure>
+  </div>
+</section>
+
+<section class="cont">
+  <h2><span class="n">6</span>Cómo se calcula el precio</h2>
+  <p>Al cliente se le cobra el producto por lo que costó, más las libras, más (si se activa) un % del producto, más otros cargos:</p>
+  <span class="formula">Precio = productos + libras × cobro por libra + (% del producto, apagado por defecto) + otros cargos</span>
+  <p>Y la ganancia del encargo es lo cobrado menos lo que gastaron ustedes:</p>
+  <span class="formula">Ganancia = precio − productos − libras × lo que nos cuesta la libra</span>
+  <table>
+    <tr><th>Ejemplo: bocina de 99.95 USD, 2.5 lb, cobro 5 USD/lb, costo 2.50 USD/lb</th><th class="num">USD</th></tr>
+    <tr><td>Productos</td><td class="num">99.95</td></tr>
+    <tr><td>Libras: 2.5 × 5</td><td class="num">12.50</td></tr>
+    <tr><td><b>Precio al cliente</b></td><td class="num"><b>112.45</b></td></tr>
+    <tr><td>Nuestro costo: 99.95 + 2.5 × 2.50</td><td class="num">106.20</td></tr>
+    <tr><td><b>Ganancia</b></td><td class="num"><b>6.25</b></td></tr>
+  </table>
+  <ul>
+    <li><b>% del producto</b>: interruptor <span class="k">Cobrar un % del precio del producto</span>. Viene <b>apagado</b>; se enciende en cada encargo o, para todos los nuevos, en Ajustes. Con 10%, la bocina sumaría 9.99 USD.</li>
+    <li><b>Otros cargos o descuentos</b>: <span class="k">+ Otro cargo o descuento</span> (mensajería a domicilio, un forro…). Un número negativo es un descuento.</li>
+    <li><b>Precio acordado</b>: si le cobras un precio cerrado, escríbelo y se usa en lugar del calculado.</li>
+    <li><b>Costo del envío</b>: si la agencia te cobró una cantidad exacta, escríbela; si no, se calcula con el peso.</li>
+    <li>En Ajustes se puede <b>cobrar libras completas</b> (2.3 lb → 3 lb) y <b>redondear el precio</b> hacia arriba a 0.50, 1 o 5 USD.</li>
+  </ul>
+  <div class="tip"><b>Cada encargo guarda sus precios</b>Si mañana cambias el precio de la libra, los encargos ya anotados no cambian: solo los nuevos usan el valor nuevo.</div>
+</section>
+
+<section>
+  <h2><span class="n">7</span>Seguir un encargo hasta entregarlo</h2>
+  <div class="split">
+    <div class="txt">
+      <p>Toca un encargo para ver su ficha: precio, lo que debe, botones para <b>llamar</b> o escribir por <b>WhatsApp</b> al cliente y la <b>línea de tiempo</b> con cada paso, su fecha y los <b>días que tardó</b>; los pasos que faltan muestran la fecha <b>prevista</b>.</p>
+      <ul>
+        <li><span class="k">Rastrear</span> abre la página de la empresa de transporte con el nº de seguimiento (o el buscador universal 17TRACK). <span class="k">Ver en Amazon/SHEIN…</span> abre el pedido en la tienda.</li>
+        <li><span class="k">Recordármelo en el calendario</span> añade la llegada al calendario del teléfono con una alarma.</li>
+        <li>Toca un paso de la línea de tiempo para corregir su fecha.</li>
+        <li>El menú <span class="k">⋮</span> permite editar, <b>enviar al cliente un resumen</b> con el estado y el precio, hacer otro encargo para el mismo cliente, cancelar o eliminar.</li>
+      </ul>
+    </div>
+    <div class="pair">
+      <figure><img src="../preview/android/14-encargo-ficha.png" alt=""><figcaption><span class="os a">Android</span>Ficha del encargo</figcaption></figure>
+      <figure class="ios"><img src="../preview/ios/14-encargo-ficha.png" alt=""><figcaption><span class="os i">iPhone</span>Ficha del encargo</figcaption></figure>
+    </div>
+  </div>
+  <h3>El botón grande: el siguiente paso</h3>
+  <table>
+    <tr><th style="width:40mm">Botón</th><th>Qué pide y qué hace</th></tr>
+    <tr><td><b>Ya lo compré</b></td><td>Para encargos «por comprar». Desde ese día el precio del producto sale de la tarjeta.</td></tr>
+    <tr><td><b>Llegó al almacén</b></td><td>La fecha y el <b>peso real</b> que da el almacén: el precio se recalcula. Muestra los días que tardó desde la compra.</td></tr>
+    <tr><td><b>Enviado a Cuba</b></td><td>La fecha de envío y, si la sabes, la llegada prevista. Se descuenta el costo del envío (libras × lo que cuesta la libra).</td></tr>
+    <tr><td><b>Llegó a Cuba</b></td><td>La fecha. Queda en «En Cuba: listo para entregar».</td></tr>
+    <tr><td><b>Entregado al cliente</b></td><td>La fecha y <b>cuánto cobras ahora</b> (por defecto, lo que falta) y dónde entra: efectivo o tarjeta. Pon 0 si te paga después.</td></tr>
+  </table>
+  <div class="row">
+    <figure><img src="../preview/android/16-llego-almacen.png" alt=""><figcaption><span class="os a">Android</span>Llegó al almacén: peso real</figcaption></figure>
+    <figure class="ios"><img src="../preview/ios/16-llego-almacen.png" alt=""><figcaption><span class="os i">iPhone</span>Llegó al almacén</figcaption></figure>
+    <figure><img src="../preview/android/17-entregar-cobrar.png" alt=""><figcaption><span class="os a">Android</span>Entregar y cobrar</figcaption></figure>
+    <figure class="ios"><img src="../preview/ios/17-entregar-cobrar.png" alt=""><figcaption><span class="os i">iPhone</span>Entregar y cobrar</figcaption></figure>
+  </div>
+</section>
+
+<section class="cont">
+  <h3>Enviar varios a Cuba a la vez</h3>
+  <div class="split">
+    <div class="txt">
+      <p>Cuando mandas una caja con varios encargos, en <b>Encargos</b> elige el filtro <span class="k">En el almacén</span> y toca <span class="k">Enviar a Cuba</span>. Marca los que van, pon la fecha y toca <span class="k">Enviar</span>. La app muestra el peso total y el costo del envío.</p>
+      <h3>Cobros</h3>
+      <p>En la ficha, <span class="k">Registrar cobro</span> anota un pago (adelanto o el resto): importe, fecha y si entró en <b>efectivo</b> (lo normal) o en la <b>tarjeta</b> (si un familiar pagó desde EE. UU.). Toca un cobro para corregirlo o borrarlo. El filtro <b>Deben dinero</b> lista a quien le falta pagar.</p>
+      <h3>Cancelar</h3>
+      <p>Menú <span class="k">⋮ → Cancelar encargo</span>. Si la tienda devuelve el dinero, anótalo con <span class="k">Anotar devolución de la tienda</span>: vuelve a la tarjeta.</p>
+      <div class="note"><b>¿Cuándo cuenta la ganancia?</b>La ganancia de un encargo cuenta el <b>día que se entrega</b>. El dinero, en cambio, se mueve cuando pasa: la compra sale de la tarjeta el día de la compra, el envío el día que se envía y los cobros entran el día que se cobran.</div>
+    </div>
+    <div class="pair">
+      <figure><img src="../preview/android/19-enviar-a-cuba.png" alt=""><figcaption><span class="os a">Android</span>Enviar varios a Cuba</figcaption></figure>
+      <figure class="ios"><img src="../preview/ios/19-enviar-a-cuba.png" alt=""><figcaption><span class="os i">iPhone</span>Enviar varios a Cuba</figcaption></figure>
+    </div>
+  </div>
+
+  <section class="cont">
+    <h2><span class="n">8</span>Clientes</h2>
+    <div class="split">
+      <div class="txt">
+        <p>En <b>Encargos</b>, el botón de las personas (arriba) abre la lista de <b>clientes</b>: se forma sola con los nombres y teléfonos de los encargos y de las remesas.</p>
+        <p>Cada cliente muestra cuántos encargos hizo, cuánto ha gastado y <b>cuánto debe</b>. En su ficha están sus encargos y remesas, botones para llamar o escribir por WhatsApp y <span class="k">Nuevo encargo para…</span>.</p>
+      </div>
+      <div class="pair">
+        <figure><img src="../preview/android/21-cliente.png" alt=""><figcaption><span class="os a">Android</span>Ficha del cliente</figcaption></figure>
+        <figure class="ios"><img src="../preview/ios/21-cliente.png" alt=""><figcaption><span class="os i">iPhone</span>Ficha del cliente</figcaption></figure>
+      </div>
+    </div>
+  </section>
+</section>
+
+<section>
+  <h2><span class="n">9</span>Remesas</h2>
+  <p>Así funciona el negocio: alguien en EE. UU. quiere que entreguen, por ejemplo, <b>100 USD en efectivo</b> a un familiar en Cuba. Transfiere a la tarjeta <b>101 USD</b> (con 1% de comisión) y ustedes entregan los 100 aquí. Para el dinero del negocio es un <b>cambio de efectivo a tarjeta</b> y la comisión es la ganancia.</p>
+  <div class="split">
+    <div class="txt">
+      <p>La pestaña <b>Remesas</b> muestra cuánto hay <b>por entregar</b> y cuánto efectivo hay (avisa si no alcanza), las comisiones del mes y la lista <i>Pendientes / Entregadas / Todas</i>, con dirección y teléfono.</p>
+      <p>El botón <span class="k">Compartir</span> de arriba manda la lista de entregas pendientes (dirección, teléfono e importe) por WhatsApp a quien vaya a repartir.</p>
+    </div>
+    <div class="pair">
+      <figure><img src="../preview/android/30-remesas.png" alt=""><figcaption><span class="os a">Android</span>Remesas</figcaption></figure>
+      <figure class="ios"><img src="../preview/ios/30-remesas.png" alt=""><figcaption><span class="os i">iPhone</span>Remesas</figcaption></figure>
+    </div>
+  </div>
+  <h3>Anotar una remesa</h3>
+  <ol class="steps">
+    <li>Toca <span class="k">+ Nueva remesa</span>.</li>
+    <li>Escribe <b>cuánto entregar</b> y la <b>comisión</b>: la app calcula lo que debe llegar a la tarjeta. Si sabes lo que transfirieron, elige <span class="k">Sé cuánto transfirieron</span> y calcula lo que hay que entregar. También puedes escribir la transferencia a mano si acordaron otra cantidad.</li>
+    <li><b>Quién recibe</b>: nombre, teléfono y <b>dirección</b> (o <span class="k">Elegir uno anterior</span>). <b>Quién envía</b> es opcional.</li>
+    <li><b>Ya llegó a la tarjeta</b>: déjalo encendido si la transferencia ya está; si no, apágalo y márcalo luego con <span class="k">Ya llegó la transferencia</span>.</li>
+  </ol>
+  <div class="row">
+    <figure><img src="../preview/android/31-nueva-remesa.png" alt=""><figcaption><span class="os a">Android</span>Nueva remesa</figcaption></figure>
+    <figure class="ios"><img src="../preview/ios/31-nueva-remesa.png" alt=""><figcaption><span class="os i">iPhone</span>Nueva remesa</figcaption></figure>
+    <figure><img src="../preview/android/32-remesa-ficha.png" alt=""><figcaption><span class="os a">Android</span>Ficha: entregar</figcaption></figure>
+    <figure class="ios"><img src="../preview/ios/33-entregar-remesa.png" alt=""><figcaption><span class="os i">iPhone</span>Marcar como entregada</figcaption></figure>
+  </div>
+  <h3>Entregar</h3>
+  <p>En la ficha toca <span class="k">Ya se entregó</span>: la fecha y, si el mensajero cobró algo, el <b>costo de la entrega</b> (se resta de la ganancia de esa remesa). Desde la ficha puedes llamar, abrir WhatsApp o el <b>mapa</b> con la dirección, y <span class="k">⋮ → Enviar datos de la entrega</span> al mensajero.</p>
+  <div class="note"><b>¿Cuándo cuenta la ganancia de una remesa?</b>Cuando ya se recibió la transferencia <b>y</b> se entregó el efectivo. El dinero entra en la tarjeta el día que llega la transferencia y sale del efectivo el día de la entrega.</div>
+</section>
+
+<section>
+  <h2><span class="n">10</span>Dinero: tarjeta, efectivo, gastos y trabajadores</h2>
+  <div class="split">
+    <div class="txt">
+      <p>La pestaña <b>Dinero</b> muestra el saldo de la <b>tarjeta EE. UU.</b> y del <b>efectivo en Cuba</b> y lo que falta por mover: lo que deben los clientes, las remesas por entregar, las transferencias por llegar y los envíos aún por pagar.</p>
+      <p>Debajo, tres vistas por mes: <b>Gastos</b>, <b>Trabajadores</b> y <b>Movimientos</b> (todo lo que entró y salió de las dos cuentas).</p>
+      <p>Toca una cuenta para ver sus movimientos y los botones:</p>
+      <ul>
+        <li><b>Añadir</b>: dinero que ponen los socios.</li>
+        <li><b>Retirar</b>: reparto de ganancias u otros.</li>
+        <li><b>Pasar</b>: de tarjeta a efectivo o al revés (si alguien lleva efectivo y lo deposita). Las remesas ya lo hacen solas.</li>
+        <li><b>Contar</b>: escribes lo que hay de verdad y la app ajusta el saldo.</li>
+      </ul>
+    </div>
+    <div class="pair">
+      <figure><img src="../preview/android/40-dinero.png" alt=""><figcaption><span class="os a">Android</span>Dinero</figcaption></figure>
+      <figure class="ios"><img src="../preview/ios/41-cuenta-tarjeta.png" alt=""><figcaption><span class="os i">iPhone</span>Movimientos de la tarjeta</figcaption></figure>
+    </div>
+  </div>
+  <div class="split">
+    <div class="txt">
+      <h3 style="margin-top:0">Gastos del negocio</h3>
+      <p><span class="k">+ Nuevo gasto</span> (o «Gasto» en Inicio): categoría (recargas, transporte, embalaje, comisiones del banco…; <span class="k">+ Nueva</span> crea otra), importe, con qué se pagó, la fecha y <b>de qué negocio es</b>: Encargos, Remesas o <b>Los dos</b> (se reparte a medias).</p>
+      <h3>Trabajadores</h3>
+      <p>En <span class="k">Trabajadores</span> añade a quienes trabajan para el negocio (mensajero, ayudante…). <span class="k">Pagar</span> anota cada pago: a quién, cuánto, con qué cuenta, para qué negocio trabajó y un detalle («semana del 1 al 7»). Los pagos se restan de la ganancia neta del negocio elegido.</p>
+    </div>
+    <div class="pair">
+      <figure><img src="../preview/android/42-nuevo-gasto.png" alt=""><figcaption><span class="os a">Android</span>Nuevo gasto</figcaption></figure>
+      <figure class="ios"><img src="../preview/ios/44-pago-trabajador.png" alt=""><figcaption><span class="os i">iPhone</span>Pago a un trabajador</figcaption></figure>
+    </div>
+  </div>
+  <div class="tip"><b>Los saldos no se escriben: se calculan</b>La tarjeta y el efectivo salen de todo lo anotado (compras, envíos, cobros, remesas, gastos, pagos y movimientos). Si algo se anotó mal, corrígelo y el saldo se arregla solo.</div>
+</section>
+
+<section>
+  <h2><span class="n">11</span>Informes y ganancia de cada negocio</h2>
+  <div class="split">
+    <div class="txt">
+      <p>Elige <b>Día, Semana, Mes o Año</b> y muévete con las flechas (o toca el título para elegir una fecha).</p>
+      <ul>
+        <li><b>Ganancia neta de los dos negocios</b> y la de <b>Encargos</b> y <b>Remesas</b> por separado.</li>
+        <li><b>Entró en efectivo</b> y <b>entró en la tarjeta</b>.</li>
+        <li>Gráfico de la ganancia neta de cada negocio por día (o por mes en el año). Toca una columna para ver sus cifras; «Ver como tabla» muestra los números.</li>
+      </ul>
+    </div>
+    <div class="pair">
+      <figure><img src="../preview/android/50-informes.png" alt=""><figcaption><span class="os a">Android</span>Informes</figcaption></figure>
+      <figure class="ios"><img src="../preview/ios/50-informes.png" alt=""><figcaption><span class="os i">iPhone</span>Informes</figcaption></figure>
+    </div>
+  </div>
+  <div class="split">
+    <div class="txt">
+      <h3 style="margin-top:0">De lo cobrado a la ganancia neta</h3>
+      <p><b>Encargos</b>: lo cobrado por los encargos entregados − productos − envío a Cuba = ganancia de los encargos (con cuánto vino de las libras, del % y de otros cargos); − gastos y trabajadores de encargos − la mitad de lo compartido = <b>ganancia neta de encargos</b>.</p>
+      <p><b>Remesas</b>: entregado en efectivo, recibido en la tarjeta, comisiones − costo de las entregas − gastos y trabajadores de remesas − la mitad de lo compartido = <b>ganancia neta de remesas</b>.</p>
+      <h3>Tiempos de llegada</h3>
+      <p>Media de días de <b>compra → almacén</b> (y por cada tienda), <b>almacén → Cuba</b>, <b>envío → Cuba</b> y el total. Con 3 o más encargos de una tienda, la app usa estos tiempos reales para calcular las llegadas previstas.</p>
+    </div>
+    <div class="pair">
+      <figure><img src="../preview/android/51-informes-negocios.png" alt=""><figcaption><span class="os a">Android</span>Encargos y remesas</figcaption></figure>
+      <figure class="ios"><img src="../preview/ios/52-informes-tiempos.png" alt=""><figcaption><span class="os i">iPhone</span>Tiempos de llegada</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">12</span>Cierre del día</h2>
+  <div class="split">
+    <div class="txt">
+      <p>Al terminar el día toca <span class="k">Cierre</span> en Inicio. La pantalla muestra:</p>
+      <ul>
+        <li><b>Ganancia neta del día</b>, de encargos y de remesas.</li>
+        <li><b>Ingresos del día</b>: lo que entró en efectivo y en la tarjeta, gastos y pagos.</li>
+        <li><b>Lo que pasó hoy</b>: compras, llegadas al almacén y a Cuba, envíos, entregas y remesas.</li>
+        <li><b>Efectivo en Cuba</b>: con cuánto empezó el día, lo que entró y salió y cuánto <b>debería haber</b>. Si lo cuentas, escribe lo contado: verás si cuadra, sobra o falta.</li>
+        <li>El <b>saldo de la tarjeta</b>.</li>
+        <li><b>Pendiente</b>: encargos por llegar al almacén y a Cuba (con fecha; los atrasados en rojo), en el almacén sin enviar, en Cuba por entregar, remesas por entregar y lo que deben los clientes.</li>
+      </ul>
+      <p><span class="k">Guardar cierre</span> lo guarda (si contaste el efectivo y hay diferencia, la anota para que el saldo coincida) y <span class="k">Compartir</span> lo manda por WhatsApp. Las flechas de arriba abren cierres de otros días.</p>
+    </div>
+    <div class="pair">
+      <figure><img src="../preview/android/60-cierre.png" alt=""><figcaption><span class="os a">Android</span>Cierre del día</figcaption></figure>
+      <figure class="ios"><img src="../preview/ios/61-cierre-efectivo.png" alt=""><figcaption><span class="os i">iPhone</span>Efectivo contado</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="split">
+    <div class="txt">
+      <h3 style="margin-top:0">Así queda el mensaje del cierre</h3>
+<pre id="cierre"></pre>
+      <div class="warn"><b>Si anotas algo después de cerrar</b>Inicio avisa «Hubo cambios después del cierre». Vuelve a abrirlo y guárdalo otra vez.</div>
+    </div>
+    <div class="pair" style="flex-direction:column;align-items:flex-end">
+      <figure><img src="../preview/android/62-cierre-pendiente.png" alt=""><figcaption><span class="os a">Android</span>Lo pendiente</figcaption></figure>
+      <figure class="ios"><img src="../preview/ios/63-cierre-guardado.png" alt=""><figcaption><span class="os i">iPhone</span>Cierre guardado</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">13</span>Avisos de llegada</h2>
+  <p>La app te recuerda cuándo un encargo debe llegar <b>al almacén</b> y <b>a Cuba</b>, unos días antes (2 por defecto, en <span class="k">Ajustes → Avisar con</span>) y el mismo día:</p>
+  <ul>
+    <li><b>En la app</b>, siempre: en Inicio, «Llegan pronto» y «Atrasados»; en la lista de encargos, cada uno dice cuándo llega.</li>
+    <li><b>Avisos del teléfono</b>: actívalos en <span class="k">Ajustes → Avisos en el teléfono</span> y da permiso. En <b>Android</b> con la app instalada, Chrome puede mostrarlos aunque la app esté cerrada (lo decide el teléfono, normalmente una o dos veces al día); si no, salen al abrir la app. En <b>iPhone</b> (iOS 16.4 o más nuevo, con la app añadida a la pantalla de inicio) salen al abrir la app.</li>
+    <li><b>Calendario</b>, lo más seguro en los dos teléfonos: en la ficha de un encargo toca <span class="k">Recordármelo en el calendario</span>. Se abre el evento con la fecha prevista y alarmas para que lo guardes en el Calendario del iPhone o en Google Calendar.</li>
+  </ul>
+  <h3>¿De dónde sale la fecha prevista?</h3>
+  <ol>
+    <li>La que escribas tú o pegues desde la tienda (lo más exacto).</li>
+    <li>Si no, la fecha de compra + lo que suele tardar esa tienda: primero lo aprendido con tus encargos (3 o más), si no los días de <span class="k">Ajustes → Días que tarda cada tienda</span>.</li>
+    <li>A Cuba: la fecha de envío + los días del almacén a Cuba (aprendidos o de Ajustes).</li>
+  </ol>
+  <div class="note"><b>¿Y el rastreo automático?</b>Amazon y SHEIN no dejan que otras apps lean sus pedidos, así que la app no puede saber sola cuándo llega un paquete. Lo que sí hace: reconoce la empresa del nº de seguimiento, abre su página de rastreo con un toque, lee la fecha si pegas el texto de la tienda y aprende cuánto tarda cada tienda de verdad.</div>
+</section>
+
+<section>
+  <h2><span class="n">14</span>Sincronizar los teléfonos <span class="badge">BETA</span></h2>
+  <p>Es <b>opcional</b> y está en pruebas. Sirve para que todo el equipo vea lo mismo: cuánto dinero hay, qué se debe, qué falta por entregar. Cada teléfono sigue funcionando sin internet; al sincronizar se <b>juntan</b> los cambios de todos.</p>
+  <div class="split">
+    <div class="txt">
+      <h3 style="margin-top:0">Cómo funciona</h3>
+      <ol class="steps">
+        <li>Cada cambio queda marcado con la hora y con quién lo hizo.</li>
+        <li>Al sincronizar, el teléfono descarga la copia compartida y, <b>antes de traer datos nuevos, guarda una copia de seguridad de sí mismo</b> (capítulo 15).</li>
+        <li>Junta las dos: de cada encargo, remesa o gasto se queda con la versión más reciente; lo borrado se borra en todos.</li>
+        <li>Sube el resultado para los demás.</li>
+      </ol>
+      <p>Con <b>Automática</b> encendida se sincroniza al abrir la app, unos segundos después de guardar algo y cada pocos minutos. Si estás rellenando un formulario, espera a que termines. El icono de la nube arriba en Inicio muestra el estado; tócalo para sincronizar ya.</p>
+      <div class="note"><b>¿Dónde se guarda?</b>En un <b>Gist secreto</b> de la cuenta de GitHub, <b>cifrado con AES-256</b>: sin el código del grupo es ilegible. GitHub guarda además todas las versiones anteriores.</div>
+    </div>
+    <div class="pair">
+      <figure><img src="../preview/android/72-sincronizar.png" alt=""><figcaption><span class="os a">Android</span>Sincronizar</figcaption></figure>
+      <figure class="ios"><img src="../preview/ios/75-sincronizacion-activa.png" alt=""><figcaption><span class="os i">iPhone</span>Ya sincronizando</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h3 style="margin-top:0">Crear el grupo (una sola persona, una sola vez)</h3>
+  <div class="split">
+    <div class="txt">
+      <ol class="steps">
+        <li><span class="k">Ajustes → Sincronizar entre teléfonos → Crear el grupo</span>.</li>
+        <li>Toca <span class="k">Abrir GitHub</span> e inicia sesión con la cuenta del negocio.</li>
+        <li>En «Expiration» elige <b>No expiration</b>. La casilla <b>gist</b> ya viene marcada (es el único permiso que hace falta).</li>
+        <li>Toca <b>Generate token</b> y copia el código que empieza por <b>ghp_</b>.</li>
+        <li>Vuelve a la app, pégalo y toca <span class="k">Crear</span>. Se suben los datos de este teléfono.</li>
+        <li>La app muestra el <b>código del grupo</b> (empieza por <b>IB1-</b>). Mándalo por WhatsApp <b>solo</b> a las personas del negocio.</li>
+      </ol>
+      <h3>Unirse (los demás teléfonos)</h3>
+      <ol class="steps">
+        <li><span class="k">Ajustes → Sincronizar entre teléfonos → Unirme a un grupo</span> (o en la bienvenida, <span class="k">Ya lo usamos en otro teléfono</span>).</li>
+        <li>Pega el código y toca <span class="k">Unirme</span>. La app dice cuántos encargos y remesas hay en el grupo.</li>
+        <li>Confirma. Si el teléfono ya tenía datos, se <b>combinan</b> con los del grupo (antes se guarda una copia automática).</li>
+      </ol>
+      <div class="warn"><b>Cuida el código</b>Quien tenga el código puede ver y cambiar los datos del negocio. Si se filtra, borra el token en GitHub (Settings → Developer settings → Tokens) y creen un grupo nuevo.</div>
+    </div>
+    <div class="pair">
+      <figure><img src="../preview/android/73-crear-grupo.png" alt=""><figcaption><span class="os a">Android</span>Crear el grupo</figcaption></figure>
+      <figure class="ios"><img src="../preview/ios/74-unirse.png" alt=""><figcaption><span class="os i">iPhone</span>Unirse con el código</figcaption></figure>
+    </div>
+  </div>
+  <h3>Sin internet: por archivo</h3>
+  <p>Si no hay conexión (o GitHub no abre), en la misma pantalla: <span class="k">Enviar mis datos</span> manda un archivo por WhatsApp o Bluetooth, y quien lo recibe toca <span class="k">Combinar datos recibidos</span>. Se juntan igual que al sincronizar, también con copia de seguridad antes.</p>
+  <div class="note"><b>Si GitHub no carga en Cuba</b>Algunos servicios de EE. UU. pueden fallar sin VPN. Si la sincronización da «Sin conexión con GitHub», prueben con una VPN o usen el intercambio por archivo.</div>
+</section>
+
+<section>
+  <h2><span class="n">15</span>Copias de seguridad</h2>
+  <div class="split">
+    <div class="txt">
+      <h3 style="margin-top:0">Copias automáticas (en el teléfono)</h3>
+      <p>La app guarda sola una copia de este teléfono <b>antes de sincronizar con cambios de otros</b>, antes de combinar un archivo, de unirse a un grupo, de restaurar o de borrar todo. Se conservan las 10 últimas y una por día de las dos últimas semanas.</p>
+      <p>En <span class="k">Ajustes → Copias automáticas</span> (o desde la pantalla de sincronizar) toca una para <b>Restaurar</b> (el teléfono vuelve a como estaba; antes guarda otra copia de lo actual) o <b>Exportar</b> como archivo. <span class="k">Hacer una copia ahora</span> guarda una a mano.</p>
+      <div class="tip"><b>Si algo sale mal al sincronizar</b>Restaura la copia «Antes de sincronizar». Tus datos de ese momento vuelven y, en la próxima sincronización, se imponen a lo que hay en el grupo (lo que otros añadieron después no se pierde).</div>
+      <h3>Copia en un archivo</h3>
+      <p><span class="k">Ajustes → Hacer copia de seguridad</span> crea un archivo para guardar en Google Drive, Archivos de iCloud o WhatsApp. Hazlo cada semana (si no sincronizan, Inicio te lo recuerda). <span class="k">Restaurar o combinar una copia</span> lo abre: <b>Reemplazar</b> deja el teléfono igual que la copia; <b>Combinar</b> la junta con lo que hay.</p>
+    </div>
+    <div class="pair">
+      <figure><img src="../preview/android/76-copias-automaticas.png" alt=""><figcaption><span class="os a">Android</span>Copias automáticas</figcaption></figure>
+      <figure class="ios"><img src="../preview/ios/76-copias-automaticas.png" alt=""><figcaption><span class="os i">iPhone</span>Copias automáticas</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">16</span>Ajustes</h2>
+  <div class="split">
+    <div class="txt">
+      <table>
+        <tr><th>Ajuste</th><th>Para qué</th></tr>
+        <tr><td>Tu nombre</td><td>Firma de tus cambios (se ve en las fichas y en la sincronización).</td></tr>
+        <tr><td>Cobro por libra / Nos cuesta la libra</td><td>Precio de las libras al cliente y su costo real.</td></tr>
+        <tr><td>Cobrar libras completas</td><td>Redondea el peso hacia arriba.</td></tr>
+        <tr><td>Sumar un % del producto</td><td>Apagado por defecto; el % que se usa al encenderlo.</td></tr>
+        <tr><td>Redondear el precio final</td><td>A 0.50, 1 o 5 USD hacia arriba.</td></tr>
+        <tr><td>Compras y envío se pagan con</td><td>Tarjeta o efectivo (se puede cambiar en cada encargo).</td></tr>
+        <tr><td>Comisión por defecto</td><td>De las remesas nuevas.</td></tr>
+        <tr><td>Del almacén a Cuba / Avisar con</td><td>Días que tarda el envío y antelación de los avisos.</td></tr>
+        <tr><td>Días por tienda, Tiendas, Categorías de gastos</td><td>Listas que se usan en los formularios.</td></tr>
+        <tr><td>Avisos en el teléfono</td><td>Capítulo 13.</td></tr>
+        <tr><td>Sincronizar <span class="badge">BETA</span></td><td>Capítulo 14.</td></tr>
+        <tr><td>Estilo y Tema</td><td>Automático (según el teléfono), iPhone o Android; claro u oscuro.</td></tr>
+      </table>
+      <p>Los cambios de precios solo afectan a los encargos nuevos. Con la sincronización activa, los ajustes del negocio se comparten con el grupo (tu nombre, el estilo y el tema son de cada teléfono).</p>
+    </div>
+    <div class="pair">
+      <figure><img src="../preview/android/70-ajustes.png" alt=""><figcaption><span class="os a">Android</span>Ajustes</figcaption></figure>
+      <figure class="ios"><img src="../preview/ios/71-ajustes-abajo.png" alt=""><figcaption><span class="os i">iPhone</span>Diseño y datos</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">17</span>Preguntas frecuentes</h2>
+  <dl class="faq">
+    <dt>¿Necesito internet?</dt>
+    <dd>No. Solo para instalarla la primera vez, para las actualizaciones y para sincronizar. Rastrear un paquete o abrir el mapa también usan internet.</dd>
+    <dt>El saldo del efectivo no coincide con lo que tengo.</dt>
+    <dd>Revisa en Dinero → Movimientos si falta algo por anotar (un gasto, una entrega, un cobro). Si no aparece, usa <b>Contar</b> o anota lo contado en el cierre del día: la diferencia queda registrada.</dd>
+    <dt>Un cliente pagó una parte por adelantado.</dt>
+    <dd>Escríbelo en «El cliente adelantó» al crear el encargo, o en la ficha con <b>Registrar cobro</b>. Al entregar, la app propone cobrar solo lo que falta.</dd>
+    <dt>Compré varias cosas de distintos clientes en un mismo pedido de Amazon.</dt>
+    <dd>Haz un encargo por cliente con el mismo nº de pedido y de seguimiento. En el almacén podrás enviarlos juntos con «Enviar a Cuba».</dd>
+    <dt>¿Por qué un encargo dice «(aprox.)»?</dt>
+    <dd>Porque la fecha prevista es calculada (o el peso no es el real todavía). Escribe la fecha que da la tienda o el peso del almacén y desaparece.</dd>
+    <dt>Un gasto es de los dos negocios.</dt>
+    <dd>Elige «Los dos»: se resta a medias de encargos y de remesas.</dd>
+    <dt>Dos personas cambiaron lo mismo a la vez.</dt>
+    <dd>Al sincronizar gana el cambio más reciente de cada registro. Si algo no quedó bien, cada teléfono tiene copias automáticas de antes de sincronizar.</dd>
+    <dt>Cambié de teléfono.</dt>
+    <dd>Con sincronización: instala la app y únete al grupo con el código. Sin ella: haz una copia en archivo en el teléfono viejo y restáurala en el nuevo.</dd>
+    <dt>¿Se ve en iPhone igual que en Android?</dt>
+    <dd>Hace lo mismo con el diseño de cada sistema. Si prefieres el otro, cámbialo en Ajustes → Estilo.</dd>
+  </dl>
+</section>
+
+<script>
+  // Inserta el texto de ejemplo del cierre.
+  fetch('../preview/android/cierre-ejemplo.txt').then((r) => r.text()).then((t) => (document.getElementById('cierre').textContent = t)).catch(() => {});
+</script>
+</body>
+</html>
