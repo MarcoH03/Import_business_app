@@ -18,6 +18,14 @@ assert.equal(S.remitReceive(100, 1), 101);
 const r = { amount: 100, received: 101, deliverCost: 0, receivedAt: '2026-10-01', deliveredAt: '2026-10-02' };
 assert.equal(S.remitCalc(r).profit, 1); assert.equal(S.remitCalc(r).doneDate, '2026-10-02');
 ok('remesa');
+// Métodos de envío: tarifas y días por separado
+const air = S.newOrder({ method: 'aereo', weightLb: 10, items: [{ desc: 'x', qty: 1, price: 20 }] });
+const sea = S.newOrder({ method: 'maritimo', weightLb: 10, items: [{ desc: 'x', qty: 1, price: 20 }] });
+assert.equal(S.orderCalc(air).total, 65); assert.equal(S.orderCalc(air).shipCost, 25);
+assert.equal(S.orderCalc(sea).total, 45); assert.equal(S.orderCalc(sea).shipCost, 12);
+air.status = sea.status = 'enviado'; air.dates.shipped = sea.dates.shipped = '2026-10-01';
+assert.equal(S.orderEta(air).cuba, '2026-10-08'); assert.equal(S.orderEta(sea).cuba, '2026-10-31');
+ok('envío aéreo y marítimo');
 // Lectura de fechas de llegada
 const ref = '2026-10-07';
 assert.equal(S.parseArrival('Arriving Tuesday, October 14', ref), '2026-10-14');
@@ -46,14 +54,16 @@ await new Promise((res) => setTimeout(res, 5));
 phone1.orders[0].note = 'editado'; phone1.orders[0].upd = Date.now();
 phone1.expenses = []; phone1.tombs.push({ id: 'E1', col: 'expenses', upd: Date.now() });
 phone2.remits.push({ id: 'R1', amount: 100, received: 101, upd: Date.now() });
-phone2.settings.lbPrice = 5; phone2.meta.supd.lbPrice = Date.now();
+phone2.settings.airPrice = 5; phone2.meta.supd.airPrice = Date.now();
+phone1.settings.seaPrice = 3; phone1.meta.supd.seaPrice = Date.now();
 const m12 = Y.mergeStates(phone1, phone2);
 const m21 = Y.mergeStates(phone2, phone1);
 assert.equal(Y.signature(m12), Y.signature(m21));
 assert.equal(m12.orders[0].note, 'editado');
 assert.equal(m12.expenses.length, 0);
 assert.equal(m12.remits.length, 1);
-assert.equal(m12.settings.lbPrice, 5);
+assert.equal(m12.settings.airPrice, 5);
+assert.equal(m12.settings.seaPrice, 3);
 assert.equal(Y.signature(Y.mergeStates(m12, m21)), Y.signature(m12));
 ok('fusión: conmutativa, idempotente, respeta borrados y ajustes');
 // Dos cierres del mismo día → queda uno
@@ -70,4 +80,12 @@ await assert.rejects(() => Y.unseal(sealed, Y.newKey()));
 const code = Y.encodeCode({ g: 'abc123', t: 'ghp_x', k: key });
 assert.deepEqual(Y.decodeCode(code), { g: 'abc123', t: 'ghp_x', k: key });
 ok('cifrado y código del grupo');
+// Datos de la versión 1.0 (una sola tarifa) se convierten al abrir
+const ce = console.error;
+console.error = () => {}; // en Node no hay IndexedDB: el guardado falla, pero la conversión se hace igual
+await S.replaceState({ settings: { lbPrice: 5.5, lbCost: 3, cubaDays: 15 }, orders: [{ id: 'v1', items: [], dates: {}, lbPrice: 5.5, lbCost: 3 }] });
+console.error = ce;
+assert.equal(S.state.settings.airPrice, 5.5); assert.equal(S.state.settings.airCost, 3); assert.equal(S.state.settings.seaPrice, 2.5);
+assert.equal(S.state.settings.lbPrice, undefined); assert.equal(S.state.orders[0].method, 'aereo');
+ok('migración de la tarifa única a la aérea');
 console.log('Todo bien');

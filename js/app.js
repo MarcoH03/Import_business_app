@@ -3,7 +3,7 @@ import { icon } from './icons.js';
 import {
   state, local, init, today, fmtDate, fmtDateLong, fmtTime, usd, lbs, pct, num, round2, norm, digits, parseDate, addDays, sum,
   ACCOUNTS, ACC_SHORT, STATUS_LABEL, balance, moneyEntries, pending, upcoming, orderCalc, orderTitle, clientLabel, transitStats,
-  isOpen, activeRemits, pendingRemits, remitCalc, stats, buckets, periodRange, closureOutdated, APP_VERSION, BIZ, saveLocal,
+  isOpen, METHODS, methodOf, methodLabel, activeRemits, pendingRemits, remitCalc, stats, buckets, periodRange, closureOutdated, APP_VERSION, BIZ, saveLocal,
 } from './store.js';
 import { $, esc, seg, chips, li, kv, secTitle, emptyState, menuSheet, histPush, histBack, onBackWithoutLayer, openLayers, snackbar, isIOS } from './ui.js';
 import { ctx, onRefresh, refresh, onCommit, shareText } from './core.js';
@@ -83,7 +83,7 @@ function viewInicio() {
     ${up.inCuba.length || pend.remitsN || up.atWarehouse.length || pend.dueN ? `${secTitle('Pendiente')}<div class="list">
       ${up.inCuba.length ? li({ act: 'goFilter', attrs: 'data-f="cuba"', ic: 'pin', color: 'green', title: `${plural(up.inCuba.length, 'encargo', 'encargos')} en Cuba para entregar`, sub: esc(up.inCuba.slice(0, 4).map((x) => clientLabel(x.o.client)).join(', ')) }) : ''}
       ${pend.remitsN ? li({ act: 'goRemits', ic: 'send', color: 'teal', title: `${plural(pend.remitsN, 'remesa', 'remesas')} por entregar`, sub: cash < pend.remits ? `<span class="red-t">${icon('warning')}El efectivo (${usd(cash)}) no alcanza</span>` : 'Con dirección y teléfono', right: `<b>${usd(pend.remits)}</b>` }) : ''}
-      ${up.atWarehouse.length ? li({ act: 'goFilter', attrs: 'data-f="almacen"', ic: 'store', color: 'purple', title: `${plural(up.atWarehouse.length, 'encargo', 'encargos')} en el almacén sin enviar`, sub: lbs(sum(up.atWarehouse, (o) => orderCalc(o).lb)) }) : ''}
+      ${up.atWarehouse.length ? li({ act: 'goFilter', attrs: 'data-f="almacen"', ic: 'store', color: 'purple', title: `${plural(up.atWarehouse.length, 'encargo', 'encargos')} en el almacén sin enviar`, sub: byMethodLine(up.atWarehouse) }) : ''}
       ${pend.dueN ? li({ act: 'goFilter', attrs: 'data-f="debe"', ic: 'cash', color: 'amber', title: 'Por cobrar a clientes', sub: plural(pend.dueN, 'encargo', 'encargos'), right: `<b>${usd(pend.due)}</b>` }) : ''}
     </div>` : ''}
     ${secTitle('Hoy')}
@@ -105,6 +105,13 @@ function viewInicio() {
     </button>
     ${backupOld && (state.orders.length || state.remits.length) ? `<button class="banner" data-act="backup">${icon('shield')}<span>${local.lastBackup ? `Última copia de seguridad: ${fmtDate(local.lastBackup)}.` : 'Aún no has hecho una copia de seguridad.'} Toca para hacerla.</span>${icon('chevR')}</button>` : ''}
     <div class="spacer"></div>`;
+}
+/** «2 aéreo (3.4 lb) · 1 marítimo (12 lb)» */
+export function byMethodLine(list) {
+  return Object.keys(METHODS).map((m) => {
+    const l = list.filter((o) => methodOf(o) === m);
+    return l.length ? `${l.length} ${methodLabel(m).toLowerCase()} (${lbs(sum(l, (o) => orderCalc(o).lb))})` : '';
+  }).filter(Boolean).join(' · ');
 }
 function alertRow(x, late = false) {
   const toWh = x.o.status === 'comprado';
@@ -331,6 +338,7 @@ function viewInformes() {
       ${E.cancelled ? kv(`${plural(E.cancelled, 'cancelado', 'cancelados')}`, usd(E.cancelLoss), E.cancelLoss < 0 ? 'red' : '') : ''}
       ${kv('= Ganancia de los encargos', usd(E.profit), 'strong')}
       ${kv('   de ella: libras / % / otros cargos', `${usd(round2(E.weight - E.shipCost))} / ${usd(E.fee)} / ${usd(E.extras)}`, 'dim')}
+      ${Object.entries(E.byMethod).filter(([, x]) => x.count).map(([m, x]) => kv(`   ${methodLabel(m)}: ${x.count} · ${lbs(x.lb)}`, `ganancia ${usd(x.profit)}`, 'dim')).join('')}
       ${st.ex.encargos ? kv('− Gastos de encargos', usd(st.ex.encargos)) : ''}
       ${st.pay.encargos ? kv('− Trabajadores de encargos', usd(st.pay.encargos)) : ''}
       ${st.shared ? kv('− Mitad de lo compartido', usd(st.shared / 2)) : ''}
@@ -362,8 +370,7 @@ function viewInformes() {
     ${secTitle('Tiempos de llegada (todos los encargos)')}
     <div class="card">
       ${kv('Compra → almacén', days(ts.toWarehouse.avg), '')}
-      ${kv('Almacén → Cuba', days(ts.whToCuba.avg))}
-      ${kv('Envío → llegada a Cuba', days(ts.transit.avg))}
+      ${Object.entries(ts.methods).map(([m, x]) => `${kv(`Almacén → Cuba (${methodLabel(m).toLowerCase()})`, days(x.whToCuba.avg))}${kv(`Envío ${methodLabel(m).toLowerCase()} → Cuba${x.transit.n ? ` (${x.transit.n})` : ''}`, days(x.transit.avg))}`).join('')}
       ${kv('Compra → Cuba (total)', days(ts.total.avg), 'strong')}
       ${ts.stores.length ? `<div class="divider"></div>${ts.stores.map((s) => kv(`${esc(s.store)} → almacén (${s.n})`, `${Math.round(s.avg * 10) / 10} días <small class="dim">(${s.min}–${s.max})</small>`)).join('')}` : '<div class="dim">Aún no hay encargos con fechas de llegada.</div>'}
     </div>

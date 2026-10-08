@@ -1,7 +1,7 @@
 // Ajustes, bienvenida, copias de seguridad, avisos, instalación y sincronización (beta).
 import { icon } from './icons.js';
 import {
-  state, local, num, usd, today, fmtDate, fmtTime, uid, replaceState, defaultState, saveLocal, APP_VERSION, idbGet, idbPut, reminders,
+  state, local, num, usd, METHODS, today, fmtDate, fmtTime, uid, replaceState, defaultState, saveLocal, APP_VERSION, idbGet, idbPut, reminders,
 } from './store.js';
 import {
   esc, openPage, topPage, dialog, confirmDlg, promptDlg, snackbar, tf, inp, numInp, chips, seg, toggle, li, kv, secTitle,
@@ -169,13 +169,22 @@ export function settingsPage() {
         ${tf('Tu nombre', inp('user', pg.data.user, 'placeholder="Ej. Marco" autocapitalize="words"'), { help: 'Aparece en lo que anotas, para saber quién hizo cada cambio al sincronizar.' })}
         ${tf('Nombre del negocio', inp('business', pg.data.business))}
       </div>
+      ${Object.entries(METHODS).map(([m, x]) => `
+        ${secTitle(`${icon(x.ic)} Envío ${x.label.toLowerCase()}`)}
+        <div class="form">
+          <div class="row2">
+            ${tf('Cobro por libra', numInp(x.price, pg.data[x.price]), { suffix: 'USD' })}
+            ${tf('Nos cuesta la libra', numInp(x.cost, pg.data[x.cost]), { suffix: 'USD' })}
+          </div>
+          ${tf('Del almacén a Cuba', numInp(x.days, pg.data[x.days], 'inputmode="numeric"'), { suffix: 'días' })}
+        </div>`).join('')}
+      <div class="form">
+        <div class="tf-help">Lo que se le cobra al cliente por libra y lo que nos cobra la agencia por enviarla a Cuba en cada método; la diferencia es ganancia. Con 3 o más envíos de un método, la app usa los días reales que tardaron.</div>
+        <div class="lbl">Método por defecto en los encargos nuevos</div>
+        ${seg('defaultMethod', Object.entries(METHODS).map(([m, x]) => [m, x.label]), S.defaultMethod)}
+      </div>
       ${secTitle('Precio de los encargos')}
       <div class="form">
-        <div class="row2">
-          ${tf('Cobro por libra', numInp('lbPrice', pg.data.lbPrice), { suffix: 'USD' })}
-          ${tf('Nos cuesta la libra', numInp('lbCost', pg.data.lbCost), { suffix: 'USD' })}
-        </div>
-        <div class="tf-help">Lo que se le cobra al cliente por libra y lo que nos cobra la agencia por enviarla a Cuba. La diferencia es ganancia.</div>
         <label class="li check-li"><span class="grow"><span class="t">Cobrar libras completas</span><span class="s">2.3 lb se cobran como 3 lb</span></span>${toggle('roundLb', S.roundLb)}</label>
         <label class="li check-li"><span class="grow"><span class="t">Sumar un % del precio del producto</span><span class="s">Apagado por defecto; se puede encender en cada encargo</span></span>${toggle('feeOn', S.feeOn)}</label>
         ${tf('Porcentaje', numInp('feePct', pg.data.feePct), { suffix: '%' })}
@@ -191,7 +200,6 @@ export function settingsPage() {
       <div class="form">${tf('Comisión por defecto', numInp('remitPct', pg.data.remitPct), { suffix: '%', help: 'Con 1%, para entregar 100 USD se cobran 101 en la tarjeta. Se puede cambiar en cada remesa.' })}</div>
       ${secTitle('Tiempos y avisos')}
       <div class="form">
-        ${tf('Del almacén a Cuba', numInp('cubaDays', pg.data.cubaDays, 'inputmode="numeric"'), { suffix: 'días' })}
         ${tf('Avisar con', numInp('warnDays', pg.data.warnDays, 'inputmode="numeric"'), { suffix: 'días de antelación' })}
         ${tf('Nombre del almacén', inp('warehouse', pg.data.warehouse))}
       </div>
@@ -235,7 +243,7 @@ export function settingsPage() {
         await enableNotifications(pg.data.__notify);
         return pg.render();
       }
-      const NUM = ['lbPrice', 'lbCost', 'feePct', 'remitPct', 'cubaDays', 'warnDays'];
+      const NUM = ['airPrice', 'airCost', 'airDays', 'seaPrice', 'seaCost', 'seaDays', 'feePct', 'remitPct', 'warnDays'];
       if (NUM.includes(key)) S[key] = num(pg.data[key]);
       else S[key] = pg.data[key];
       clearTimeout(pg.t);
@@ -560,7 +568,7 @@ export async function runSync({ manual = false, beforeApply } = {}) {
 /* ======================= bienvenida ======================= */
 export function welcomePage() {
   const S = state.settings;
-  const d = { user: local.user, business: S.business, lbPrice: String(S.lbPrice), lbCost: String(S.lbCost), remitPct: String(S.remitPct), card: '', cash: '' };
+  const d = { user: local.user, business: S.business, airPrice: String(S.airPrice), airCost: String(S.airCost), seaPrice: String(S.seaPrice), seaCost: String(S.seaCost), remitPct: String(S.remitPct), card: '', cash: '' };
   openPage({
     title: 'Bienvenida',
     cls: 'welcome',
@@ -574,10 +582,12 @@ export function welcomePage() {
       </div>
       <div class="form">
         ${tf('Tu nombre', inp('user', d.user, 'placeholder="Ej. Marco" autocapitalize="words"'))}
-        <div class="row2">
-          ${tf('Cobro por libra', numInp('lbPrice', d.lbPrice), { suffix: 'USD' })}
-          ${tf('Nos cuesta la libra', numInp('lbCost', d.lbCost), { suffix: 'USD' })}
-        </div>
+        ${Object.entries(METHODS).map(([m, x]) => `
+          <div class="lbl">Envío ${x.label.toLowerCase()} (por libra)</div>
+          <div class="row2">
+            ${tf('Cobro al cliente', numInp(x.price, d[x.price]), { suffix: 'USD' })}
+            ${tf('Nos cuesta', numInp(x.cost, d[x.cost]), { suffix: 'USD' })}
+          </div>`).join('')}
         ${tf('Comisión de las remesas', numInp('remitPct', d.remitPct), { suffix: '%' })}
         <div class="row2">
           ${tf('Hay en la tarjeta', numInp('card', d.card, 'placeholder="0"'), { suffix: 'USD' })}
@@ -597,7 +607,7 @@ export function welcomePage() {
         local.user = d.user.trim();
         local.onboarded = true;
         local.seenVersion = APP_VERSION;
-        Object.assign(S, { lbPrice: num(d.lbPrice), lbCost: num(d.lbCost), remitPct: num(d.remitPct) });
+        Object.assign(S, { airPrice: num(d.airPrice), airCost: num(d.airCost), seaPrice: num(d.seaPrice), seaCost: num(d.seaCost), remitPct: num(d.remitPct) });
         for (const [acc, v] of [['tarjeta', d.card], ['efectivo', d.cash]]) {
           if (num(v)) state.moves.push({ id: uid(), ts: Date.now(), date: today(), account: acc, amount: num(v), type: 'inicial', note: 'Dinero al empezar a usar la app' });
         }

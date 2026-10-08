@@ -2,13 +2,18 @@
 import { icon } from './icons.js';
 import {
   state, num, round2, usd, lbs, today, addDays, fmtDate, fmtDateLong, fmtTime, closureData, saveClosure, closureOutdated,
-  orderTitle, clientLabel, orderCalc,
+  orderTitle, clientLabel, orderCalc, METHODS, methodOf, methodLabel,
 } from './store.js';
 import { $, esc, openPage, dialog, snackbar, tf, inp, numInp, li, kv, secTitle } from './ui.js';
 import { commit, shareText } from './core.js';
 import { orderDetail } from './orders.js';
 import { remitDetail } from './remit.js';
 
+/** «2 aéreo (3.4 lb) · 1 marítimo (12 lb)» */
+const byMethod = (list) => Object.keys(METHODS).map((m) => {
+  const l = list.filter((o) => methodOf(o) === m);
+  return l.length ? `${l.length} ${methodLabel(m).toLowerCase()} (${lbs(l.reduce((a, o) => a + orderCalc(o).lb, 0))})` : '';
+}).filter(Boolean).join(' · ');
 const n = (x, one, many) => `${x} ${x === 1 ? one : many}`;
 
 export function closureText(d, counted = '', note = '') {
@@ -56,10 +61,10 @@ export function closureText(d, counted = '', note = '') {
     L.push(`  Por llegar al almacén: ${up.toWarehouse.length}`);
     for (const x of up.toWarehouse.slice(0, 8)) L.push(`   – ${clientLabel(x.o.client)}: ${orderTitle(x.o)} · ${fmtDate(x.date)}${x.days < 0 ? ' (atrasado)' : ''}`);
   }
-  if (up.atWarehouse.length) L.push(`  En el almacén sin enviar: ${up.atWarehouse.length} (${lbs(up.atWarehouse.reduce((a, o) => a + orderCalc(o).lb, 0))})`);
+  if (up.atWarehouse.length) L.push(`  En el almacén sin enviar: ${byMethod(up.atWarehouse)}`);
   if (up.toCuba.length) {
     L.push(`  Por llegar a Cuba: ${up.toCuba.length}`);
-    for (const x of up.toCuba.slice(0, 8)) L.push(`   – ${clientLabel(x.o.client)}: ${orderTitle(x.o)} · ${fmtDate(x.date)}${x.days < 0 ? ' (atrasado)' : ''}`);
+    for (const x of up.toCuba.slice(0, 8)) L.push(`   – ${clientLabel(x.o.client)}: ${orderTitle(x.o)} · ${methodLabel(methodOf(x.o)).toLowerCase()} · ${fmtDate(x.date)}${x.days < 0 ? ' (atrasado)' : ''}`);
   }
   if (up.inCuba.length) L.push(`  En Cuba por entregar: ${up.inCuba.length}`);
   if (up.toBuy.length) L.push(`  Por comprar: ${up.toBuy.length}`);
@@ -132,7 +137,7 @@ export function closurePage(date = today()) {
         <div class="list">
           ${up.toWarehouse.length ? up.toWarehouse.slice(0, 6).map((x) => pendRow(x, 'store', 'Al almacén')).join('') : ''}
           ${up.toCuba.length ? up.toCuba.slice(0, 6).map((x) => pendRow(x, 'plane', 'A Cuba')).join('') : ''}
-          ${up.atWarehouse.length ? li({ ic: 'store', color: 'purple', title: `${up.atWarehouse.length} en el almacén sin enviar`, sub: lbs(up.atWarehouse.reduce((a, o) => a + orderCalc(o).lb, 0)) }) : ''}
+          ${up.atWarehouse.length ? li({ ic: 'store', color: 'purple', title: `${up.atWarehouse.length} en el almacén sin enviar`, sub: byMethod(up.atWarehouse) }) : ''}
           ${up.inCuba.length ? li({ ic: 'pin', color: 'green', title: `${up.inCuba.length} en Cuba por entregar`, sub: esc(up.inCuba.map((x) => clientLabel(x.o.client)).join(', ')) }) : ''}
           ${pend.remitsN ? li({ ic: 'send', color: 'teal', title: `${pend.remitsN} remesa${pend.remitsN === 1 ? '' : 's'} por entregar`, right: `<b>${usd(pend.remits)}</b>` }) : ''}
           ${pend.dueN ? li({ ic: 'cash', color: 'amber', title: 'Por cobrar a clientes', sub: `${pend.dueN} encargo${pend.dueN === 1 ? '' : 's'}`, right: `<b>${usd(pend.due)}</b>` }) : ''}
@@ -184,7 +189,7 @@ function evRow(ic, color, title, list, right = '') {
 }
 function pendRow(x, ic, where) {
   const late = x.days < 0;
-  return li({ act: 'order', attrs: `data-id="${x.o.id}"`, ic, color: late ? 'red' : x.days <= num(state.settings.warnDays) ? 'amber' : 'blue', title: `${where}: ${esc(clientLabel(x.o.client))}`, sub: esc(orderTitle(x.o)), right: `<small class="${late ? 'red-t' : ''}">${late ? 'atrasado' : fmtDate(x.date)}</small>` });
+  return li({ act: 'order', attrs: `data-id="${x.o.id}"`, ic, color: late ? 'red' : x.days <= num(state.settings.warnDays) ? 'amber' : 'blue', title: `${where}: ${esc(clientLabel(x.o.client))}`, sub: `${esc(orderTitle(x.o))} · ${methodLabel(methodOf(x.o))}`, right: `<small class="${late ? 'red-t' : ''}">${late ? 'atrasado' : fmtDate(x.date)}</small>` });
 }
 function resultHtml(counted, expected) {
   if (counted === '' || counted === null) return '';

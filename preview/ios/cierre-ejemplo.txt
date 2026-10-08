@@ -12,13 +12,13 @@ Miércoles, 28 de octubre
 💸 Remesas: 3 recibidas · 1 entregada
 
 💵 *Efectivo en Cuba*
-  Al empezar: $968.52
+  Al empezar: $916.52
   + Entró: $56.70
   − Salió: $217
-  Debería haber: *$808.22*
-  Contado: $808.22
+  Debería haber: *$756.22*
+  Contado: $756.22
   ✅ Cuadra
-💳 Tarjeta EE. UU.: *$5,654.57*
+💳 Tarjeta EE. UU.: *$5,724.38*
 
 ⏳ *Pendiente*
   Por llegar al almacén: 4
@@ -26,11 +26,11 @@ Miércoles, 28 de octubre
    – Mabel Suárez: Cafetera Oster 12 tazas · 29/10/26
    – Lisandra Hernández: 2× Conjuntos deportivos, Tenis de niña · 01/11/26
    – Yusleidy Navarro: Bocina JBL Flip 6 · 01/11/26
-  En el almacén sin enviar: 2 (3.4 lb)
+  En el almacén sin enviar: 1 aéreo (2.1 lb) · 1 marítimo (1.3 lb)
   Por llegar a Cuba: 2
-   – Dania Ramírez: Mochila escolar, Útiles escolares · 31/10/26
-   – Osmany Rodríguez: Batería portátil EcoFlow River 2 · 05/11/26
+   – Dania Ramírez: Mochila escolar, Útiles escolares · aéreo · 30/10/26
+   – Osmany Rodríguez: Batería portátil EcoFlow River 2 · marítimo · 08/11/26
   En Cuba por entregar: 2
   Por comprar: 1
   Remesas por entregar: 3 · $650
-  Por cobrar a clientes: $911.54 (12)
+  Por cobrar a clientes: $826.04 (12)

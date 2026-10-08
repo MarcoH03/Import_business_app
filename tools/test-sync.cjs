@@ -72,17 +72,18 @@ const URL = 'http://localhost:8080/?ui=android';
 
   // Cambios a la vez: A marca la remesa como entregada y borra nada; B edita el encargo y cambia el precio de la libra.
   await run(A, async () => { const S = await import('/js/store.js'); const C = await import('/js/core.js'); S.remit('r1').deliveredAt = S.today(); await C.commit(); });
-  await run(B, async () => { const S = await import('/js/store.js'); const C = await import('/js/core.js'); S.order('o1').note = 'talla 9'; S.state.settings.lbPrice = 6; await C.commit(); });
+  await run(B, async () => { const S = await import('/js/store.js'); const C = await import('/js/core.js'); S.order('o1').note = 'talla 9'; S.state.settings.airPrice = 6; S.state.settings.seaDays = 35; await C.commit(); });
   await run(A, async () => (await import('/js/sync.js')).syncNow());
   await run(B, async () => (await import('/js/sync.js')).syncNow());
   await run(A, async () => (await import('/js/sync.js')).syncNow());
-  const snap = (p) => run(p, async () => { const S = await import('/js/store.js'); return { note: S.order('o1').note, del: S.remit('r1').deliveredAt, lb: S.state.settings.lbPrice, cash: S.balance('efectivo'), card: S.balance('tarjeta') }; });
+  const snap = (p) => run(p, async () => { const S = await import('/js/store.js'); return { note: S.order('o1').note, del: S.remit('r1').deliveredAt, lb: S.state.settings.airPrice, sea: S.state.settings.seaDays, cash: S.balance('efectivo'), card: S.balance('tarjeta') }; });
   const sa = await snap(A);
   const sbb = await snap(B);
   assert.deepEqual(sa, sbb);
   assert.equal(sa.note, 'talla 9');
   assert.ok(sa.del);
   assert.equal(sa.lb, 6);
+  assert.equal(sa.sea, 35);
 
   // Borrado en B se propaga a A.
   await run(B, async () => { const S = await import('/js/store.js'); const C = await import('/js/core.js'); S.state.orders = []; await C.commit(); await (await import('/js/sync.js')).syncNow(); });

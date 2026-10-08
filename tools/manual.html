@@ -72,7 +72,7 @@
     <figure class="ios"><img src="../preview/ios/10-encargos.png" alt=""><figcaption><span class="os i">iPhone</span>Encargos</figcaption></figure>
     <figure><img src="../preview/android/51-informes-negocios.png" alt=""><figcaption><span class="os a">Android</span>Informes</figcaption></figure>
   </div>
-  <div class="meta">Versión 1.0 · Dirección de la app: <b>https://marcoh03.github.io/Import_business_app/</b><br>Las capturas usan datos inventados.</div>
+  <div class="meta">Versión 1.1 · Dirección de la app: <b>https://marcoh03.github.io/Import_business_app/</b><br>Las capturas usan datos inventados.</div>
 </div>
 
 <section style="break-before:auto">
@@ -147,7 +147,7 @@
         <p>La primera vez la app pide:</p>
         <ul>
           <li><b>Tu nombre</b>: aparece en lo que anotas, para saber quién hizo cada cambio.</li>
-          <li><b>Cobro por libra</b> (lo que paga el cliente) y <b>lo que nos cuesta la libra</b> (lo que cobra la agencia por llevarla a Cuba).</li>
+          <li>Para el envío <b>aéreo</b> y para el <b>marítimo</b>: el <b>cobro por libra</b> (lo que paga el cliente) y <b>lo que nos cuesta la libra</b> (lo que cobra la agencia por llevarla a Cuba).</li>
           <li><b>Comisión de las remesas</b> por defecto (por ejemplo 1%).</li>
           <li><b>El dinero que hay ahora</b> en la tarjeta y en efectivo, para que los saldos empiecen bien.</li>
         </ul>
@@ -211,7 +211,8 @@
     <li><b>Tienda y seguimiento</b>: Amazon, SHEIN, Temu… el nº de pedido y el <b>nº de seguimiento</b>. La app reconoce si es de UPS, USPS, FedEx, DHL o Amazon.</li>
     <li><b>Estado</b>: normalmente <i>Comprado</i> (o <i>Por comprar</i> si aún no lo compraste) y la fecha de compra.</li>
     <li><b>Llegada prevista al almacén</b>: escribe la que da la tienda o toca <span class="k">Pegar la fecha que da la tienda</span> (copia antes el texto «Arriving Tuesday, October 14», «Llega el 14 de oct.»…). Si la dejas vacía, la app la calcula con lo que suele tardar esa tienda.</li>
-    <li><b>Peso y precio</b>: el peso (aproximado al principio; el real se pone cuando llega al almacén) y el cobro por libra.</li>
+    <li><b>Envío a Cuba</b>: <b>Aéreo</b> o <b>Marítimo</b>, según lo que escoja el cliente. Cada uno trae su cobro por libra, su costo y su tiempo de llegada (debajo se ve la tarifa y la fecha aproximada a Cuba).</li>
+    <li><b>Peso y precio</b>: el peso (aproximado al principio; el real se pone cuando llega al almacén) y el cobro por libra del método elegido (se puede cambiar solo para este encargo).</li>
     <li><b>Pagos</b>: con qué se pagó la compra y el envío (tarjeta por defecto) y, si el cliente dejó dinero adelantado, cuánto.</li>
   </ol>
   <div class="row">
@@ -224,18 +225,25 @@
 
 <section class="cont">
   <h2><span class="n">6</span>Cómo se calcula el precio</h2>
-  <p>Al cliente se le cobra el producto por lo que costó, más las libras, más (si se activa) un % del producto, más otros cargos:</p>
-  <span class="formula">Precio = productos + libras × cobro por libra + (% del producto, apagado por defecto) + otros cargos</span>
-  <p>Y la ganancia del encargo es lo cobrado menos lo que gastaron ustedes:</p>
-  <span class="formula">Ganancia = precio − productos − libras × lo que nos cuesta la libra</span>
+  <p>Hay <b>dos métodos de envío</b>, cada uno con sus tarifas y su tiempo, que se ajustan por separado en <span class="k">Ajustes</span>:</p>
   <table>
-    <tr><th>Ejemplo: bocina de 99.95 USD, 2.5 lb, cobro 5 USD/lb, costo 2.50 USD/lb</th><th class="num">USD</th></tr>
+    <tr><th>Método</th><th class="num">Cobro al cliente</th><th class="num">Nos cuesta</th><th class="num">Del almacén a Cuba</th></tr>
+    <tr><td>Aéreo (ejemplo)</td><td class="num">5.00 USD/lb</td><td class="num">2.50 USD/lb</td><td class="num">≈ 7 días</td></tr>
+    <tr><td>Marítimo (ejemplo)</td><td class="num">2.50 USD/lb</td><td class="num">1.20 USD/lb</td><td class="num">≈ 30 días</td></tr>
+  </table>
+  <p>Al cliente se le cobra el producto por lo que costó, más las libras al precio del método que escogió, más (si se activa) un % del producto, más otros cargos:</p>
+  <span class="formula">Precio = productos + libras × cobro por libra del método + (% del producto, apagado por defecto) + otros cargos</span>
+  <p>Y la ganancia del encargo es lo cobrado menos lo que gastaron ustedes:</p>
+  <span class="formula">Ganancia = precio − productos − libras × lo que nos cuesta la libra en ese método</span>
+  <table>
+    <tr><th>Ejemplo: bocina de 99.95 USD, 2.5 lb, por aéreo (cobro 5 USD/lb, costo 2.50 USD/lb)</th><th class="num">USD</th></tr>
     <tr><td>Productos</td><td class="num">99.95</td></tr>
     <tr><td>Libras: 2.5 × 5</td><td class="num">12.50</td></tr>
     <tr><td><b>Precio al cliente</b></td><td class="num"><b>112.45</b></td></tr>
     <tr><td>Nuestro costo: 99.95 + 2.5 × 2.50</td><td class="num">106.20</td></tr>
     <tr><td><b>Ganancia</b></td><td class="num"><b>6.25</b></td></tr>
   </table>
+  <p>Por marítimo, la misma bocina costaría al cliente 99.95 + 2.5 × 2.50 = <b>106.20 USD</b>, con una ganancia de 2.5 × (2.50 − 1.20) = <b>3.25 USD</b>, y tardaría unas cuatro semanas más.</p>
   <ul>
     <li><b>% del producto</b>: interruptor <span class="k">Cobrar un % del precio del producto</span>. Viene <b>apagado</b>; se enciende en cada encargo o, para todos los nuevos, en Ajustes. Con 10%, la bocina sumaría 9.99 USD.</li>
     <li><b>Otros cargos o descuentos</b>: <span class="k">+ Otro cargo o descuento</span> (mensajería a domicilio, un forro…). Un número negativo es un descuento.</li>
@@ -246,7 +254,7 @@
   <div class="tip"><b>Cada encargo guarda sus precios</b>Si mañana cambias el precio de la libra, los encargos ya anotados no cambian: solo los nuevos usan el valor nuevo.</div>
 </section>
 
-<section>
+<section class="cont">
   <h2><span class="n">7</span>Seguir un encargo hasta entregarlo</h2>
   <div class="split">
     <div class="txt">
@@ -268,7 +276,7 @@
     <tr><th style="width:40mm">Botón</th><th>Qué pide y qué hace</th></tr>
     <tr><td><b>Ya lo compré</b></td><td>Para encargos «por comprar». Desde ese día el precio del producto sale de la tarjeta.</td></tr>
     <tr><td><b>Llegó al almacén</b></td><td>La fecha y el <b>peso real</b> que da el almacén: el precio se recalcula. Muestra los días que tardó desde la compra.</td></tr>
-    <tr><td><b>Enviado a Cuba</b></td><td>La fecha de envío y, si la sabes, la llegada prevista. Se descuenta el costo del envío (libras × lo que cuesta la libra).</td></tr>
+    <tr><td><b>Enviado a Cuba</b></td><td>La fecha de envío y, si la sabes, la llegada prevista (si no, se calcula con los días del método: aéreo o marítimo). Se descuenta el costo del envío (libras × lo que cuesta la libra en ese método).</td></tr>
     <tr><td><b>Llegó a Cuba</b></td><td>La fecha. Queda en «En Cuba: listo para entregar».</td></tr>
     <tr><td><b>Entregado al cliente</b></td><td>La fecha y <b>cuánto cobras ahora</b> (por defecto, lo que falta) y dónde entra: efectivo o tarjeta. Pon 0 si te paga después.</td></tr>
   </table>
@@ -284,7 +292,7 @@
   <h3>Enviar varios a Cuba a la vez</h3>
   <div class="split">
     <div class="txt">
-      <p>Cuando mandas una caja con varios encargos, en <b>Encargos</b> elige el filtro <span class="k">En el almacén</span> y toca <span class="k">Enviar a Cuba</span>. Marca los que van, pon la fecha y toca <span class="k">Enviar</span>. La app muestra el peso total y el costo del envío.</p>
+      <p>Cuando mandas una caja con varios encargos, en <b>Encargos</b> elige el filtro <span class="k">En el almacén</span> y toca <span class="k">Enviar a Cuba</span>. Arriba elige <b>Aéreo</b> o <b>Marítimo</b> (salen por separado; entre paréntesis, cuántos esperan de cada uno), marca los que van, pon la fecha y toca <span class="k">Enviar</span>. La app muestra el peso total y el costo del envío.</p>
       <h3>Cobros</h3>
       <p>En la ficha, <span class="k">Registrar cobro</span> anota un pago (adelanto o el resto): importe, fecha y si entró en <b>efectivo</b> (lo normal) o en la <b>tarjeta</b> (si un familiar pagó desde EE. UU.). Toca un cobro para corregirlo o borrarlo. El filtro <b>Deben dinero</b> lista a quien le falta pagar.</p>
       <h3>Cancelar</h3>
@@ -399,7 +407,8 @@
       <p><b>Encargos</b>: lo cobrado por los encargos entregados − productos − envío a Cuba = ganancia de los encargos (con cuánto vino de las libras, del % y de otros cargos); − gastos y trabajadores de encargos − la mitad de lo compartido = <b>ganancia neta de encargos</b>.</p>
       <p><b>Remesas</b>: entregado en efectivo, recibido en la tarjeta, comisiones − costo de las entregas − gastos y trabajadores de remesas − la mitad de lo compartido = <b>ganancia neta de remesas</b>.</p>
       <h3>Tiempos de llegada</h3>
-      <p>Media de días de <b>compra → almacén</b> (y por cada tienda), <b>almacén → Cuba</b>, <b>envío → Cuba</b> y el total. Con 3 o más encargos de una tienda, la app usa estos tiempos reales para calcular las llegadas previstas.</p>
+      <p>Media de días de <b>compra → almacén</b> (y por cada tienda), <b>almacén → Cuba</b> y <b>envío → Cuba</b> para el aéreo y el marítimo por separado, y el total. Con 3 o más encargos de una tienda (o envíos de un método), la app usa estos tiempos reales para calcular las llegadas previstas.</p>
+      <p>En la tarjeta de Encargos se ve además cuántos encargos y libras fueron por <b>aéreo</b> y por <b>marítimo</b> y la ganancia de cada uno.</p>
     </div>
     <div class="pair">
       <figure><img src="../preview/android/51-informes-negocios.png" alt=""><figcaption><span class="os a">Android</span>Encargos y remesas</figcaption></figure>
@@ -456,7 +465,7 @@
   <ol>
     <li>La que escribas tú o pegues desde la tienda (lo más exacto).</li>
     <li>Si no, la fecha de compra + lo que suele tardar esa tienda: primero lo aprendido con tus encargos (3 o más), si no los días de <span class="k">Ajustes → Días que tarda cada tienda</span>.</li>
-    <li>A Cuba: la fecha de envío + los días del almacén a Cuba (aprendidos o de Ajustes).</li>
+    <li>A Cuba: la fecha de envío + los días del método del encargo, <b>aéreo</b> o <b>marítimo</b> (aprendidos con 3 o más envíos de ese método, o los de Ajustes).</li>
   </ol>
   <div class="note"><b>¿Y el rastreo automático?</b>Amazon y SHEIN no dejan que otras apps lean sus pedidos, así que la app no puede saber sola cuándo llega un paquete. Lo que sí hace: reconoce la empresa del nº de seguimiento, abre su página de rastreo con un toque, lee la fecha si pegas el texto de la tienda y aprende cuánto tarda cada tienda de verdad.</div>
 </section>
@@ -538,13 +547,14 @@
       <table>
         <tr><th>Ajuste</th><th>Para qué</th></tr>
         <tr><td>Tu nombre</td><td>Firma de tus cambios (se ve en las fichas y en la sincronización).</td></tr>
-        <tr><td>Cobro por libra / Nos cuesta la libra</td><td>Precio de las libras al cliente y su costo real.</td></tr>
+        <tr><td>Envío aéreo y envío marítimo</td><td>Para cada uno: cobro por libra al cliente, lo que nos cuesta la libra y los días del almacén a Cuba.</td></tr>
+        <tr><td>Método por defecto</td><td>El que aparece marcado en los encargos nuevos.</td></tr>
         <tr><td>Cobrar libras completas</td><td>Redondea el peso hacia arriba.</td></tr>
         <tr><td>Sumar un % del producto</td><td>Apagado por defecto; el % que se usa al encenderlo.</td></tr>
         <tr><td>Redondear el precio final</td><td>A 0.50, 1 o 5 USD hacia arriba.</td></tr>
         <tr><td>Compras y envío se pagan con</td><td>Tarjeta o efectivo (se puede cambiar en cada encargo).</td></tr>
         <tr><td>Comisión por defecto</td><td>De las remesas nuevas.</td></tr>
-        <tr><td>Del almacén a Cuba / Avisar con</td><td>Días que tarda el envío y antelación de los avisos.</td></tr>
+        <tr><td>Avisar con</td><td>Antelación de los avisos de llegada.</td></tr>
         <tr><td>Días por tienda, Tiendas, Categorías de gastos</td><td>Listas que se usan en los formularios.</td></tr>
         <tr><td>Avisos en el teléfono</td><td>Capítulo 13.</td></tr>
         <tr><td>Sincronizar <span class="badge">BETA</span></td><td>Capítulo 14.</td></tr>
@@ -553,7 +563,7 @@
       <p>Los cambios de precios solo afectan a los encargos nuevos. Con la sincronización activa, los ajustes del negocio se comparten con el grupo (tu nombre, el estilo y el tema son de cada teléfono).</p>
     </div>
     <div class="pair">
-      <figure><img src="../preview/android/70-ajustes.png" alt=""><figcaption><span class="os a">Android</span>Ajustes</figcaption></figure>
+      <figure><img src="../preview/android/69-ajustes-envios.png" alt=""><figcaption><span class="os a">Android</span>Tarifas aéreo y marítimo</figcaption></figure>
       <figure class="ios"><img src="../preview/ios/71-ajustes-abajo.png" alt=""><figcaption><span class="os i">iPhone</span>Diseño y datos</figcaption></figure>
     </div>
   </div>
@@ -572,6 +582,8 @@
     <dd>Haz un encargo por cliente con el mismo nº de pedido y de seguimiento. En el almacén podrás enviarlos juntos con «Enviar a Cuba».</dd>
     <dt>¿Por qué un encargo dice «(aprox.)»?</dt>
     <dd>Porque la fecha prevista es calculada (o el peso no es el real todavía). Escribe la fecha que da la tienda o el peso del almacén y desaparece.</dd>
+    <dt>El cliente cambió de aéreo a marítimo (o al revés).</dt>
+    <dd>Edita el encargo y cambia el método en «Envío a Cuba»: el cobro y el costo por libra pasan a ser los del nuevo método y la llegada a Cuba se recalcula.</dd>
     <dt>Un gasto es de los dos negocios.</dt>
     <dd>Elige «Los dos»: se resta a medias de encargos y de remesas.</dd>
     <dt>Dos personas cambiaron lo mismo a la vez.</dt>
