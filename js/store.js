@@ -2,7 +2,7 @@
 // Todo el dinero se lleva en USD, en dos cuentas: la tarjeta de EE. UU. y el efectivo en Cuba.
 // GitHub solo aloja el código: los datos viven en cada teléfono (y, si se activa, en la sincronización).
 
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = '1.1.0';
 const DB_NAME = 'import-business';
 const DB_STORE = 'kv';
 const LS_KEY = 'import-business-state';
@@ -81,6 +81,21 @@ export const STATUS_DATE = { comprado: 'bought', almacen: 'warehouse', enviado: 
 export const STATUS_ORDER = STATUS.map(([k]) => k);
 export const STORES = ['Amazon', 'SHEIN', 'Temu', 'Walmart', 'eBay', 'AliExpress', 'Otra tienda'];
 export const EXPENSE_CATS = ['Mensajería', 'Transporte', 'Teléfono e internet', 'Comisiones bancarias', 'Embalaje', 'Aduana', 'Publicidad', 'Imprevistos', 'Otros'];
+/**
+ * Métodos de envío del almacén a Cuba. Cada uno tiene su cobro por libra al cliente,
+ * lo que nos cuesta la libra y los días que tarda (claves planas en Ajustes: airPrice, seaCost…).
+ */
+export const METHODS = {
+  aereo: { label: 'Aéreo', ic: 'plane', price: 'airPrice', cost: 'airCost', days: 'airDays' },
+  maritimo: { label: 'Marítimo', ic: 'ship', price: 'seaPrice', cost: 'seaCost', days: 'seaDays' },
+};
+export const methodOf = (o) => (METHODS[o?.method] ? o.method : 'aereo');
+export const methodLabel = (m) => METHODS[m]?.label || METHODS.aereo.label;
+/** Tarifas actuales de un método según Ajustes. */
+export function methodRates(m, S = state.settings) {
+  const k = METHODS[m] || METHODS.aereo;
+  return { lbPrice: num(S[k.price]), lbCost: num(S[k.cost]), days: num(S[k.days]) };
+}
 export const MOVE_TYPES = { inicial: 'Dinero inicial', aporte: 'Dinero añadido', retiro: 'Dinero retirado', ajuste: 'Ajuste por conteo', traspaso: 'Pasar dinero', cierre: 'Diferencia del cierre' };
 
 /** Colecciones de registros que se sincronizan (cada registro tiene id, y la sincronización añade upd y by). */
@@ -89,8 +104,14 @@ export const COLLECTIONS = ['orders', 'remits', 'expenses', 'workers', 'payroll'
 export function defaultSettings() {
   return {
     business: 'Import Business',
-    lbPrice: 4.5, // lo que se cobra al cliente por libra
-    lbCost: 2.5, // lo que nos cuesta enviar cada libra a Cuba
+    // Envío aéreo y marítimo: cobro por libra al cliente, lo que nos cuesta la libra y días del almacén a Cuba.
+    airPrice: 4.5,
+    airCost: 2.5,
+    airDays: 7,
+    seaPrice: 2.5,
+    seaCost: 1.2,
+    seaDays: 30,
+    defaultMethod: 'aereo',
     roundLb: false, // cobrar libras completas (redondear hacia arriba)
     feeOn: false, // % sobre el precio del producto, apagado por defecto
     feePct: 10,
@@ -99,7 +120,6 @@ export function defaultSettings() {
     payFrom: 'tarjeta', // con qué se pagan las compras en la tienda
     shipFrom: 'tarjeta', // con qué se paga el envío a Cuba
     storeDays: { Amazon: 4, SHEIN: 9, Temu: 10, Walmart: 5, eBay: 6, AliExpress: 15, 'Otra tienda': 7 }, // días hasta el almacén
-    cubaDays: 15, // días del almacén a Cuba una vez enviado
     warnDays: 2, // avisar con estos días de antelación
     warehouse: 'Almacén en Miami',
     expenseCats: [...EXPENSE_CATS],
@@ -137,6 +157,14 @@ export function defaultState() {
 
 function migrate(s) {
   const d = defaultState();
+  // Versión 1.0: una sola tarifa por libra → pasa a ser la del envío aéreo.
+  const old = s.settings || {};
+  if (old.lbPrice !== undefined && old.airPrice === undefined) {
+    old.airPrice = old.lbPrice;
+    old.airCost = old.lbCost ?? d.settings.airCost;
+  }
+  for (const k of ['lbPrice', 'lbCost', 'cubaDays']) delete old[k];
+  for (const o of s.orders || []) if (!o.method) o.method = 'aereo';
   for (const k of Object.keys(d)) if (s[k] === undefined) s[k] = d[k];
   s.settings = { ...d.settings, ...s.settings, storeDays: { ...d.settings.storeDays, ...(s.settings?.storeDays || {}) } };
   s.meta = { supd: {}, ...s.meta };
@@ -233,6 +261,12 @@ export const statusIdx = (s) => STATUS_ORDER.indexOf(s);
 /** ¿El encargo ya pasó por ese estado? */
 export const reached = (o, s) => o.status !== 'cancelado' ? statusIdx(o.status) >= statusIdx(s) : !!o.dates?.[STATUS_DATE[s]];
 
+/** Método de envío con sus tarifas actuales (para un encargo nuevo o al cambiar de método). */
+export function withMethod(m, S = state.settings) {
+  const r = methodRates(m, S);
+  return { method: METHODS[m] ? m : 'aereo', lbPrice: r.lbPrice, lbCost: r.lbCost };
+}
+
 export function newOrder(prefill = {}) {
   const S = state.settings;
   return {
@@ -244,7 +278,7 @@ export function newOrder(prefill = {}) {
     dates: { created: today(), bought: today() },
     etaWarehouse: '', etaCuba: '',
     weightLb: '', weightReal: false,
-    lbPrice: S.lbPrice, lbCost: S.lbCost, roundLb: S.roundLb, feeOn: S.feeOn, feePct: S.feePct, roundTotal: S.roundTotal,
+    ...withMethod(prefill.method || S.defaultMethod || 'aereo', S), roundLb: S.roundLb, feeOn: S.feeOn, feePct: S.feePct, roundTotal: S.roundTotal,
     extras: [], priceOverride: '', shipCost: '',
     payFrom: S.payFrom, shipFrom: S.shipFrom,
     payments: [], refund: null, note: '',
@@ -292,8 +326,10 @@ export function transitStats() {
   const ship = [];
   const whToCuba = [];
   const total = [];
+  const byMethod = Object.fromEntries(Object.keys(METHODS).map((m) => [m, { ship: [], whToCuba: [], total: [] }]));
   for (const o of state.orders) {
     const d = o.dates || {};
+    const bm = byMethod[methodOf(o)];
     if (d.bought && d.warehouse) {
       const n = daysBetween(d.bought, d.warehouse);
       if (n >= 0) {
@@ -303,15 +339,24 @@ export function transitStats() {
     }
     if (d.shipped && d.cuba) {
       const n = daysBetween(d.shipped, d.cuba);
-      if (n >= 0) ship.push(n);
+      if (n >= 0) {
+        ship.push(n);
+        bm.ship.push(n);
+      }
     }
     if (d.warehouse && d.cuba) {
       const n = daysBetween(d.warehouse, d.cuba);
-      if (n >= 0) whToCuba.push(n);
+      if (n >= 0) {
+        whToCuba.push(n);
+        bm.whToCuba.push(n);
+      }
     }
     if (d.bought && d.cuba) {
       const n = daysBetween(d.bought, d.cuba);
-      if (n >= 0) total.push(n);
+      if (n >= 0) {
+        total.push(n);
+        bm.total.push(n);
+      }
     }
   }
   return {
@@ -320,6 +365,11 @@ export function transitStats() {
     transit: { n: ship.length, avg: avg(ship) },
     whToCuba: { n: whToCuba.length, avg: avg(whToCuba) },
     total: { n: total.length, avg: avg(total) },
+    methods: Object.fromEntries(Object.entries(byMethod).map(([m, x]) => [m, {
+      transit: { n: x.ship.length, avg: avg(x.ship) },
+      whToCuba: { n: x.whToCuba.length, avg: avg(x.whToCuba) },
+      total: { n: x.total.length, avg: avg(x.total) },
+    }])),
   };
 }
 const MIN_SAMPLES = 3;
@@ -329,8 +379,10 @@ export function storeDays(store, ts = transitStats()) {
   if (s && s.n >= MIN_SAMPLES) return Math.round(s.avg);
   return num(state.settings.storeDays[store] ?? state.settings.storeDays['Otra tienda'] ?? 7) || 7;
 }
-export function cubaDays(ts = transitStats()) {
-  return ts.transit.n >= MIN_SAMPLES ? Math.round(ts.transit.avg) : num(state.settings.cubaDays) || 15;
+/** Días del almacén a Cuba de un método (aprendido con 3+ envíos de ese método; si no, el de Ajustes). */
+export function cubaDays(method = 'aereo', ts = transitStats()) {
+  const t = ts.methods[METHODS[method] ? method : 'aereo'].transit;
+  return t.n >= MIN_SAMPLES ? Math.round(t.avg) : methodRates(method).days || (method === 'maritimo' ? 30 : 7);
 }
 /** Fecha prevista de llegada al almacén y a Cuba (la escrita a mano manda sobre la calculada). */
 export function orderEta(o, ts = transitStats()) {
@@ -344,7 +396,7 @@ export function orderEta(o, ts = transitStats()) {
   if (!cuba) {
     cubaAuto = true;
     const from = d.shipped || (d.warehouse ? (today() > d.warehouse ? today() : d.warehouse) : wh > today() ? wh : today());
-    cuba = addDays(from, cubaDays(ts));
+    cuba = addDays(from, cubaDays(methodOf(o), ts));
   }
   return { warehouse: wh, cuba, whAuto, cubaAuto };
 }
@@ -563,8 +615,15 @@ export function stats(from, to) {
   const delivered = state.orders.filter((o) => o.status === 'entregado' && inR(o.dates.delivered));
   const cancelled = state.orders.filter((o) => o.status === 'cancelado' && inR(o.dates.cancelled));
   const E = { count: delivered.length, revenue: 0, products: 0, shipCost: 0, weight: 0, fee: 0, extras: 0, profit: 0, lb: 0, cancelled: cancelled.length, cancelLoss: 0 };
+  const byMethod = Object.fromEntries(Object.keys(METHODS).map((m) => [m, { count: 0, lb: 0, weight: 0, shipCost: 0, profit: 0 }]));
   for (const o of delivered) {
     const k = orderCalc(o);
+    const bm = byMethod[methodOf(o)];
+    bm.count++;
+    bm.lb += k.lb;
+    bm.weight += k.weight;
+    bm.shipCost += k.shipCost;
+    bm.profit += k.profit;
     E.revenue += k.total;
     E.products += k.products;
     E.shipCost += k.shipCost;
@@ -590,6 +649,8 @@ export function stats(from, to) {
     R.profit += k.profit;
   }
   for (const o of [E, R]) for (const k of Object.keys(o)) o[k] = round2(o[k]);
+  for (const x of Object.values(byMethod)) for (const k of Object.keys(x)) x[k] = round2(x[k]);
+  E.byMethod = byMethod;
   const expenses = state.expenses.filter((e) => inR(e.date));
   const payroll = state.payroll.filter((p) => inR(p.date));
   const ex = costsByBiz(expenses);

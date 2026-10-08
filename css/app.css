@@ -832,3 +832,4 @@ html.ios[data-theme="dark"] .dialog, html.ios[data-theme="dark"] .bs-group, html
 .seg:has(> :nth-child(3)) button { padding: 0 6px; }
 .form .card .lbl, .form .card > b { display: block; }
 .ios .dialog-btns button, .ios .dialog-btns .btn.filled, .ios .dialog-btns .btn.sm { height: 44px !important; border-radius: 0 !important; padding: 0 8px !important; font-size: 17px !important; box-shadow: none; display: flex; align-items: center; }
+.sec-t > span > .ic { width: 18px; height: 18px; vertical-align: -3px; margin-right: 4px; }

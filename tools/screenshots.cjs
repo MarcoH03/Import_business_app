@@ -18,7 +18,7 @@ async function seed(page) {
     const D = (n) => S.addDays(t, n);
     const tsOf = (date, h, m = 0) => new Date(`${date}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`).getTime();
     Object.assign(S.local, { user: 'Marco', onboarded: true, seenVersion: S.APP_VERSION, lastBackup: D(-2) });
-    Object.assign(st.settings, { lbPrice: 5, lbCost: 2.5, remitPct: 2 });
+    Object.assign(st.settings, { airPrice: 5, airCost: 2.5, seaPrice: 2.5, seaCost: 1.2, remitPct: 2 });
     st.moves.push({ id: S.uid(), ts: tsOf(D(-45), 9), date: D(-45), account: 'tarjeta', amount: 1000, type: 'inicial', note: 'Dinero al empezar a usar la app' });
     st.moves.push({ id: S.uid(), ts: tsOf(D(-45), 9), date: D(-45), account: 'efectivo', amount: 6000, type: 'inicial', note: 'Dinero al empezar a usar la app' });
     st.moves.push({ id: S.uid(), ts: tsOf(D(-14), 20), date: D(-14), account: 'efectivo', amount: -300, type: 'retiro', note: 'Reparto de ganancias' });
@@ -29,6 +29,7 @@ async function seed(page) {
         client: { name: o.name, phone: o.phone || '' },
         items: o.items.map(([desc, price, qty = 1, url = '']) => ({ desc, price, qty, url })),
         store: o.store, storeOrder: o.storeOrder || '', tracking: o.tracking || '', carrier: S.guessCarrier(o.tracking || ''),
+        method: o.method || 'aereo', ...S.withMethod(o.method || 'aereo'),
         status: o.status, weightLb: o.w ?? '', weightReal: o.real ?? o.w !== undefined, feeOn: !!o.fee, feePct: 10,
         extras: o.extras || [], etaWarehouse: o.etaWh ? D(o.etaWh) : '', note: o.note || '',
         dates: { created: D(o.created ?? o.bought ?? 0) },
@@ -45,23 +46,23 @@ async function seed(page) {
       return r;
     };
     // Entregados
-    ord({ name: 'Yanelis Pérez', phone: '5 2345678', items: [['Zapatillas Nike Air Max talla 9', 89.99]], store: 'Amazon', bought: -44, wh: -40, shipped: -37, cuba: -24, delivered: -23, status: 'entregado', w: 3.1, pay: [[-44, 40]] });
-    ord({ name: 'Osmany Rodríguez', phone: '5 3456789', items: [['Freidora de aire Ninja 4 qt', 79.99]], store: 'Amazon', bought: -41, wh: -37, shipped: -37, cuba: -22, delivered: -21, fee: true, status: 'entregado', w: 11.2 });
-    ord({ name: 'Dayana Fernández', phone: '5 4567890', items: [['Vestidos de verano', 12.5, 3], ['Sandalias', 9.9]], store: 'SHEIN', bought: -40, wh: -31, shipped: -30, cuba: -16, delivered: -15, status: 'entregado', w: 2.4, fee: true });
-    ord({ name: 'Rolando García', phone: '5 5678901', items: [['Samsung Galaxy A15 128 GB', 139]], store: 'Walmart', bought: -35, wh: -30, shipped: -30, cuba: -16, delivered: -14, fee: true, status: 'entregado', w: 1.2, extras: [{ label: 'Protector y forro', amount: 8 }] });
-    ord({ name: 'Yamilé Castro', phone: '5 6789012', items: [['Leche en polvo Nido 2 kg', 24.5, 2]], store: 'Amazon', bought: -30, wh: -26, shipped: -23, cuba: -10, delivered: -9, status: 'entregado', w: 9.6 });
-    ord({ name: 'Lisandra Hernández', phone: '5 7890123', items: [['Ropa de niño talla 4T', 6.5, 6]], store: 'SHEIN', bought: -28, wh: -19, shipped: -16, cuba: -3, delivered: -2, status: 'entregado', w: 2.8 });
-    ord({ name: 'Yanelis Pérez', phone: '5 2345678', items: [['Perfume Carolina Herrera 212', 72]], store: 'Amazon', bought: -24, wh: -20, shipped: -16, cuba: -3, delivered: 0, fee: true, status: 'entregado', w: 1.5, pay: [[-24, 30]] });
-    ord({ name: 'Alexei Martínez', phone: '5 8901234', items: [['Olla arrocera Aroma 8 tazas', 29.99]], store: 'Walmart', bought: -26, wh: -21, shipped: -16, cuba: -3, delivered: -1, status: 'entregado', w: 6.4, owe: true, pay: [[-1, 30]] });
+    ord({ name: 'Yanelis Pérez', phone: '5 2345678', items: [['Zapatillas Nike Air Max talla 9', 89.99]], store: 'Amazon', bought: -44, wh: -40, shipped: -37, cuba: -30, delivered: -29, status: 'entregado', w: 3.1, pay: [[-44, 40]] });
+    ord({ name: 'Osmany Rodríguez', phone: '5 3456789', items: [['Freidora de aire Ninja 4 qt', 79.99]], store: 'Amazon', method: 'maritimo', bought: -66, wh: -62, shipped: -60, cuba: -30, delivered: -28, fee: true, status: 'entregado', w: 11.2 });
+    ord({ name: 'Dayana Fernández', phone: '5 4567890', items: [['Vestidos de verano', 12.5, 3], ['Sandalias', 9.9]], store: 'SHEIN', bought: -40, wh: -31, shipped: -30, cuba: -23, delivered: -22, status: 'entregado', w: 2.4, fee: true });
+    ord({ name: 'Rolando García', phone: '5 5678901', items: [['Samsung Galaxy A15 128 GB', 139]], store: 'Walmart', bought: -35, wh: -30, shipped: -30, cuba: -24, delivered: -21, fee: true, status: 'entregado', w: 1.2, extras: [{ label: 'Protector y forro', amount: 8 }] });
+    ord({ name: 'Yamilé Castro', phone: '5 6789012', items: [['Leche en polvo Nido 2 kg', 24.5, 2]], store: 'Amazon', method: 'maritimo', bought: -55, wh: -51, shipped: -48, cuba: -18, delivered: -17, status: 'entregado', w: 9.6 });
+    ord({ name: 'Lisandra Hernández', phone: '5 7890123', items: [['Ropa de niño talla 4T', 6.5, 6]], store: 'SHEIN', bought: -28, wh: -19, shipped: -10, cuba: -3, delivered: -2, status: 'entregado', w: 2.8 });
+    ord({ name: 'Yanelis Pérez', phone: '5 2345678', items: [['Perfume Carolina Herrera 212', 72]], store: 'Amazon', bought: -24, wh: -20, shipped: -11, cuba: -3, delivered: 0, fee: true, status: 'entregado', w: 1.5, pay: [[-24, 30]] });
+    ord({ name: 'Alexei Martínez', phone: '5 8901234', items: [['Olla arrocera Aroma 8 tazas', 29.99]], store: 'Walmart', method: 'maritimo', bought: -50, wh: -45, shipped: -33, cuba: -3, delivered: -1, status: 'entregado', w: 6.4, owe: true, pay: [[-1, 30]] });
     // En Cuba para entregar
-    ord({ name: 'Mabel Suárez', phone: '5 9012345', items: [['Juego de sábanas queen', 34.99], ['Toallas (paquete de 6)', 22]], store: 'Amazon', bought: -22, wh: -18, shipped: -15, cuba: -1, status: 'cuba', w: 7.3, pay: [[-22, 50]] });
-    ord({ name: 'Yoandry López', phone: '5 0123456', items: [['Ventilador recargable 16"', 45.99]], store: 'Amazon', bought: -21, wh: -17, shipped: -15, cuba: -1, status: 'cuba', w: 8.9 });
+    ord({ name: 'Mabel Suárez', phone: '5 9012345', items: [['Juego de sábanas queen', 34.99], ['Toallas (paquete de 6)', 22]], store: 'Amazon', bought: -22, wh: -18, shipped: -8, cuba: -1, status: 'cuba', w: 7.3, pay: [[-22, 50]] });
+    ord({ name: 'Yoandry López', phone: '5 0123456', items: [['Ventilador recargable 16"', 45.99]], store: 'Amazon', method: 'maritimo', bought: -45, wh: -41, shipped: -33, cuba: -1, status: 'cuba', w: 8.9 });
     // Enviados a Cuba
-    ord({ name: 'Dania Ramírez', phone: '5 1122334', items: [['Mochila escolar', 24.99], ['Útiles escolares', 18.5]], store: 'Amazon', bought: -16, wh: -12, shipped: -11, status: 'enviado', w: 4.2, tracking: 'TBA318472059341' });
-    ord({ name: 'Osmany Rodríguez', phone: '5 3456789', items: [['Batería portátil EcoFlow River 2', 189]], store: 'Amazon', bought: -12, wh: -8, shipped: -6, fee: true, status: 'enviado', w: 17.6, pay: [[-12, 100]], tracking: '1Z999AA10123456784' });
+    ord({ name: 'Dania Ramírez', phone: '5 1122334', items: [['Mochila escolar', 24.99], ['Útiles escolares', 18.5]], store: 'Amazon', bought: -16, wh: -12, shipped: -5, status: 'enviado', w: 4.2, tracking: 'TBA318472059341' });
+    ord({ name: 'Osmany Rodríguez', phone: '5 3456789', items: [['Batería portátil EcoFlow River 2', 189]], store: 'Amazon', method: 'maritimo', bought: -26, wh: -22, shipped: -20, fee: true, status: 'enviado', w: 17.6, pay: [[-12, 100]], tracking: '1Z999AA10123456784' });
     // En el almacén
     ord({ name: 'Rolando García', phone: '5 5678901', items: [['Tablet Amazon Fire HD 10', 109.99]], store: 'Amazon', bought: -7, wh: -3, fee: true, status: 'almacen', w: 2.1 });
-    ord({ name: 'Yamilé Castro', phone: '5 6789012', items: [['Vitaminas Centrum mujer', 18.99, 2]], store: 'Walmart', bought: -6, wh: -1, status: 'almacen', w: 1.3, real: true });
+    ord({ name: 'Yamilé Castro', phone: '5 6789012', items: [['Vitaminas Centrum mujer', 18.99, 2]], store: 'Walmart', method: 'maritimo', bought: -6, wh: -1, status: 'almacen', w: 1.3, real: true });
     // Hacia el almacén
     ord({ name: 'Lisandra Hernández', phone: '5 7890123', items: [['Conjuntos deportivos', 14.9, 2], ['Tenis de niña', 16.5]], store: 'SHEIN', bought: -5, status: 'comprado', w: 2.5, real: false, etaWh: 4, tracking: 'YT2412345678901234', storeOrder: 'GSUN8K4L00XYZ' });
     ord({ name: 'Mabel Suárez', phone: '5 9012345', items: [['Cafetera Oster 12 tazas', 39.99]], store: 'Amazon', bought: -3, status: 'comprado', w: 5, real: false, etaWh: 1, tracking: '9400111899223197428490', storeOrder: '112-4829137-5501827' });
@@ -391,6 +392,10 @@ async function seed(page) {
       await page.click('.topbar [data-act="settings"]');
       await page.waitForTimeout(500);
       await shot('70-ajustes');
+      await scrollTo('[data-bind="airPrice"]');
+      await page.waitForTimeout(200);
+      await shot('69-ajustes-envios');
+      await scrollPage(0);
       await scrollPage(1250);
       await shot('71-ajustes-abajo');
       await scrollPage(0);

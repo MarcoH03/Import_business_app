@@ -4,7 +4,7 @@ import {
   state, num, round2, usd, lbs, pct, today, addDays, daysBetween, fmtDate, fmtDateLong, relDay, uid, norm, digits,
   STATUS, STATUS_LABEL, STATUS_DATE, ACCOUNTS, ACC_SHORT, order, newOrder, orderCalc, orderTitle, clientLabel, orderEta,
   transitStats, storeDays, cubaDays, reached, statusIdx, guessCarrier, trackingUrl, storeOrderUrl, parseArrival, icsEvent,
-  clients, clientKey, ordersOfClient, isOpen,
+  clients, clientKey, ordersOfClient, isOpen, METHODS, methodOf, methodLabel, methodRates, withMethod,
 } from './store.js';
 import {
   $, esc, openPage, topPage, dialog, confirmDlg, promptDlg, menuSheet, snackbar, pickFromList, chips, seg, tf, inp, numInp, toggle, li, kv,
@@ -44,7 +44,7 @@ export function orderRow(o, ts) {
     act: 'order', attrs: `data-id="${o.id}"`, cls: 'order-li',
     ic: STATUS_ICON[o.status], color: STATUS_COLOR[o.status],
     title: esc(clientLabel(o.client)),
-    sub: `${esc(orderTitle(o))} · ${esc(o.store)}<br>${etaLine(o, ts)}`,
+    sub: `${esc(orderTitle(o))} · ${esc(o.store)} · ${methodLabel(methodOf(o))}<br>${etaLine(o, ts)}`,
     right: `<b>${usd(k.total)}</b>${k.due > 0.004 && o.status !== 'pendiente' ? `<small class="amber-t">debe ${usd(k.due)}</small>` : k.paid && k.due <= 0.004 ? '<small class="green-t">pagado</small>' : ''}`,
   });
 }
@@ -55,13 +55,13 @@ function priceRows(o) {
   const extraSum = round2(k.total - k.subtotal);
   return `
     ${kv('Productos', usd(k.products))}
-    ${kv(`Libras: ${lbs(k.lb)} × ${usd(o.lbPrice)}`, usd(k.weight))}
+    ${kv(`Envío ${methodLabel(methodOf(o)).toLowerCase()}: ${lbs(k.lb)} × ${usd(o.lbPrice)}`, usd(k.weight))}
     ${o.feeOn ? kv(`Tarifa ${pct(o.feePct)} del producto`, usd(k.fee)) : ''}
     ${(o.extras || []).filter((e) => num(e.amount)).map((e) => kv(esc(e.label || 'Otro cargo'), usd(e.amount))).join('')}
     ${extraSum ? kv(o.priceOverride !== '' && o.priceOverride != null ? 'Ajuste al precio acordado' : 'Redondeo', usd(extraSum)) : ''}
     <div class="divider"></div>
     ${kv('Precio al cliente', usd(k.total), 'big')}
-    ${kv(`Nuestro costo: producto + envío ${lbs(k.lb)} × ${usd(o.lbCost)}`, usd(k.cost), 'dim')}
+    ${kv(`Nuestro costo: producto + envío ${methodLabel(methodOf(o)).toLowerCase()} ${lbs(k.lb)} × ${usd(o.lbCost)}`, usd(k.cost), 'dim')}
     ${kv('Ganancia', usd(k.profit), k.profit < 0 ? 'red strong' : 'green strong')}`;
 }
 
@@ -114,6 +114,10 @@ export function orderEditor(id = null, prefill = {}) {
           ${tf('Llegada prevista al almacén', `<input class="inp" type="date" data-bind="etaWarehouse" value="${d.etaWarehouse || ''}">`, { help: d.etaWarehouse ? 'Escrita por ti.' : `Si la dejas vacía: ${fmtDate(e.warehouse)} (${esc(d.store)} suele tardar ${storeDays(d.store, ts)} días).` })}
           <button class="btn tonal sm" data-act="pasteEta">${icon('clipboard')} Pegar la fecha que da la tienda</button>` : ''}
 
+        ${secTitle('Envío a Cuba')}
+        ${seg('method', Object.entries(METHODS).map(([m, x]) => [m, x.label]), d.method)}
+        <div class="tf-help">${methodHelp(d.method, e.cuba, e.cubaAuto)}</div>
+
         ${secTitle('Peso y precio')}
         <div class="row2">
           ${tf('Peso', numInp('weightLb', d.weightLb, 'placeholder="0.0"'), { suffix: 'lb' })}
@@ -129,7 +133,7 @@ export function orderEditor(id = null, prefill = {}) {
           </div>`).join('')}
         <button class="btn tonal sm" data-act="addExtra">${icon('plus')} Otro cargo o descuento</button>
         <div class="card sum-card" data-sum>${priceRows(d)}</div>
-        <details class="more" ${d.priceOverride !== '' || d.shipCost !== '' || d.lbCost !== S.lbCost ? 'open' : ''}><summary>Precio acordado y costo del envío</summary>
+        <details class="more" ${d.priceOverride !== '' || d.shipCost !== '' || d.lbCost !== methodRates(d.method).lbCost ? 'open' : ''}><summary>Precio acordado y costo del envío</summary>
           <div class="form inner">
             ${tf('Precio acordado (opcional)', numInp('priceOverride', d.priceOverride, `placeholder="${orderCalc({ ...d, priceOverride: '' }).total}"`), { suffix: 'USD', help: 'Si le cobras un precio cerrado, escríbelo aquí y se usa en lugar del calculado.' })}
             ${tf('Nos cuesta la libra', numInp('lbCost', d.lbCost), { suffix: 'USD' })}
@@ -165,6 +169,8 @@ export function orderEditor(id = null, prefill = {}) {
       },
       seg: (el, ev, pg) => {
         d[el.dataset.name] = el.dataset.v;
+        // Al cambiar de método se usan sus tarifas por libra.
+        if (el.dataset.name === 'method') Object.assign(d, withMethod(el.dataset.v));
         pg.render();
       },
       addItem: (el, ev, pg) => {
@@ -242,6 +248,12 @@ export function orderEditor(id = null, prefill = {}) {
   });
 }
 
+/** Tarifas y tiempo del método elegido, para el formulario. */
+function methodHelp(m, cuba, auto) {
+  const r = methodRates(m);
+  return `${methodLabel(m)}: ${usd(r.lbPrice)}/lb al cliente · nos cuesta ${usd(r.lbCost)}/lb · unos ${cubaDays(m)} días del almacén a Cuba${cuba ? ` (llegada ${auto ? 'aprox.' : 'prevista'} ${fmtDate(cuba)})` : ''}.`;
+}
+
 /** Pone fecha de hoy a los estados alcanzados que no la tengan (y quita las de estados posteriores). */
 function ensureDates(o) {
   o.dates = o.dates || {};
@@ -307,7 +319,7 @@ export function orderDetail(id) {
         <div class="hero">
           <div class="hero-main"><span class="hero-u">${esc(clientLabel(o.client))}${o.client.phone && o.client.name ? ` · ${esc(o.client.phone)}` : ''}</span><span class="hero-n">${usd(k.total)}</span>
           <span class="hero-u">${esc(orderTitle(o))}</span></div>
-          <div class="hero-badges">${statusBadge(o.status)}${k.due > 0.004 ? `<span class="badge amber">Debe ${usd(k.due)}</span>` : k.paid ? `<span class="badge green">${icon('check')}Pagado</span>` : ''}${o.weightLb !== '' ? `<span class="badge">${icon('scale')}${lbs(o.weightLb)}${o.weightReal ? '' : ' aprox.'}</span>` : ''}</div>
+          <div class="hero-badges">${statusBadge(o.status)}${k.due > 0.004 ? `<span class="badge amber">Debe ${usd(k.due)}</span>` : k.paid ? `<span class="badge green">${icon('check')}Pagado</span>` : ''}<span class="badge ${methodOf(o) === 'maritimo' ? 'teal' : 'blue'}">${icon(METHODS[methodOf(o)].ic)}${methodLabel(methodOf(o))}</span>${o.weightLb !== '' ? `<span class="badge">${icon('scale')}${lbs(o.weightLb)}${o.weightReal ? '' : ' aprox.'}</span>` : ''}</div>
           ${contactBtns(o.client.phone)}
         </div>
         ${nx ? `<button class="btn filled block lg" data-act="advance" data-to="${nx}">${icon(STATUS_ICON[nx])} ${NEXT_LABEL[nx]}</button>` : ''}
@@ -380,7 +392,7 @@ function timeline(o, e) {
       if (s === 'almacen' && o.status === 'comprado' && e.warehouse < today()) right = '<small class="red-t">atrasado</small>';
       if (s === 'cuba' && o.status === 'enviado' && e.cuba < today()) right = '<small class="red-t">atrasado</small>';
     }
-    rows.push(li({ act: isDone || (o.status === 'comprado' && s === 'almacen') ? 'step' : '', attrs: `data-s="${s}"`, ic: STATUS_ICON[s], color: isDone ? STATUS_COLOR[s] : 'gray', title: label, sub, right, cls: `tl ${isDone ? 'done' : 'todo'}`, chev: false }));
+    rows.push(li({ act: isDone || (o.status === 'comprado' && s === 'almacen') ? 'step' : '', attrs: `data-s="${s}"`, ic: s === 'enviado' ? METHODS[methodOf(o)].ic : STATUS_ICON[s], color: isDone ? STATUS_COLOR[s] : 'gray', title: s === 'enviado' ? `${label} (${methodLabel(methodOf(o)).toLowerCase()})` : label, sub, right, cls: `tl ${isDone ? 'done' : 'todo'}`, chev: false }));
   }
   if (d.bought && d.cuba) rows.push(`<div class="li tl-total"><span class="grow">Tiempo total hasta Cuba</span><b>${daysBetween(d.bought, d.cuba)} días</b></div>`);
   return rows.join('');
@@ -424,8 +436,8 @@ export function statusPage(id, to) {
           <div class="card" data-sum>${priceRows(tmp)}</div>
           <p class="hint">Tardó ${daysBetween(o.dates.bought || o.dates.created, d.date)} días desde la compra.</p>` : ''}
         ${to === 'enviado' ? `${o.weightLb === '' ? tf('Peso', numInp('weight', d.weight, 'placeholder="0.0"'), { suffix: 'lb' }) : ''}
-          <div class="card">${kv(`Costo del envío (${lbs(k.lb)} × ${usd(o.lbCost)})`, usd(k.shipCost))}${kv('Se paga con', ACC_SHORT[o.shipFrom])}</div>
-          ${tf('Llegada prevista a Cuba (opcional)', `<input class="inp" type="date" data-bind="eta" value="${d.eta}">`, { help: `Si la dejas vacía: unos ${cubaDays()} días, ${fmtDate(addDays(d.date, cubaDays()))}.` })}` : ''}
+          <div class="card">${kv('Método', methodLabel(methodOf(o)))}${kv(`Costo del envío (${lbs(k.lb)} × ${usd(o.lbCost)})`, usd(k.shipCost))}${kv('Se paga con', ACC_SHORT[o.shipFrom])}</div>
+          ${tf('Llegada prevista a Cuba (opcional)', `<input class="inp" type="date" data-bind="eta" value="${d.eta}">`, { help: `Si la dejas vacía: unos ${cubaDays(methodOf(o))} días (${methodLabel(methodOf(o)).toLowerCase()}), ${fmtDate(addDays(d.date, cubaDays(methodOf(o))))}.` })}` : ''}
         ${to === 'cuba' && o.dates.shipped ? `<p class="hint">Tardó ${daysBetween(o.dates.shipped, d.date)} días desde que salió del almacén.</p>` : ''}
         ${to === 'entregado' ? `
           <div class="card">${kv('Precio', usd(k0.total))}${kv('Ya pagó', usd(k0.paid))}${kv('Falta', usd(k0.due), k0.due > 0 ? 'amber strong' : 'green strong')}</div>
@@ -470,30 +482,41 @@ export function statusPage(id, to) {
 
 /** Marcar varios encargos del almacén como enviados a Cuba a la vez (una misma caja o envío). */
 export function bulkShipPage() {
-  const list = state.orders.filter((o) => o.status === 'almacen');
-  const d = { date: today(), sel: Object.fromEntries(list.map((o) => [o.id, true])), eta: '' };
+  const all = state.orders.filter((o) => o.status === 'almacen');
+  const count = (m) => all.filter((o) => methodOf(o) === m).length;
+  // Aéreo y marítimo salen por separado: se empieza por el método con más encargos esperando.
+  const first = Object.keys(METHODS).sort((a, b) => count(b) - count(a))[0];
+  const d = { method: first, date: today(), sel: Object.fromEntries(all.map((o) => [o.id, true])), eta: '' };
+  const list = () => all.filter((o) => methodOf(o) === d.method);
   openPage({
     title: 'Enviar a Cuba',
     data: d,
     action: { label: 'Enviar', act: 'save' },
     render: () => {
-      const chosen = list.filter((o) => d.sel[o.id]);
+      const l = list();
+      const chosen = l.filter((o) => d.sel[o.id]);
       const w = round2(chosen.reduce((a, o) => a + orderCalc(o).lb, 0));
       const cost = round2(chosen.reduce((a, o) => a + orderCalc(o).shipCost, 0));
       return `
       <div class="form">
+        <div class="lbl">Método de envío</div>
+        ${seg('method', Object.entries(METHODS).map(([m, x]) => [m, `${x.label} (${count(m)})`]), d.method)}
         ${tf('Fecha de envío', `<input class="inp" type="date" data-bind="date" value="${d.date}">`)}
-        ${tf('Llegada prevista a Cuba (opcional)', `<input class="inp" type="date" data-bind="eta" value="${d.eta}">`, { help: `Si la dejas vacía: unos ${cubaDays()} días.` })}
+        ${tf('Llegada prevista a Cuba (opcional)', `<input class="inp" type="date" data-bind="eta" value="${d.eta}">`, { help: `Si la dejas vacía: unos ${cubaDays(d.method)} días (${methodLabel(d.method).toLowerCase()}), ${fmtDate(addDays(d.date, cubaDays(d.method)))}.` })}
       </div>
-      ${secTitle('Encargos en el almacén')}
-      <div class="list">${list.map((o) => `<label class="li check-li"><span class="cbox"><input type="checkbox" data-bind="sel.${o.id}" ${d.sel[o.id] ? 'checked' : ''}><span>${icon('check')}</span></span>
-        <span class="grow"><span class="t">${esc(clientLabel(o.client))}</span><span class="s">${esc(orderTitle(o))} · ${o.weightLb === '' ? 'sin peso' : lbs(o.weightLb)}</span></span><span class="r">${usd(orderCalc(o).shipCost)}</span></label>`).join('')}</div>
+      ${secTitle(`En el almacén · ${methodLabel(d.method).toLowerCase()}`)}
+      <div class="list">${l.length ? l.map((o) => `<label class="li check-li"><span class="cbox"><input type="checkbox" data-bind="sel.${o.id}" ${d.sel[o.id] ? 'checked' : ''}><span>${icon('check')}</span></span>
+        <span class="grow"><span class="t">${esc(clientLabel(o.client))}</span><span class="s">${esc(orderTitle(o))} · ${o.weightLb === '' ? 'sin peso' : lbs(o.weightLb)}</span></span><span class="r">${usd(orderCalc(o).shipCost)}</span></label>`).join('') : `<div class="empty-li">No hay encargos ${methodLabel(d.method).toLowerCase()}s en el almacén</div>`}</div>
       <div class="card" data-sum>${kv('Encargos', chosen.length)}${kv('Peso total', lbs(w))}${kv('Costo del envío', usd(cost), 'strong')}</div>`;
     },
-    afterBind: (pg, key) => key.startsWith('sel.') && pg.render(),
+    afterBind: (pg, key) => (key.startsWith('sel.') || key === 'date') && pg.render(),
     acts: {
+      seg: (el, ev, pg) => {
+        d.method = el.dataset.v;
+        pg.render();
+      },
       save: async (el, ev, pg) => {
-        const ids = list.filter((o) => d.sel[o.id]).map((o) => o.id);
+        const ids = list().filter((o) => d.sel[o.id]).map((o) => o.id);
         if (!ids.length) return snackbar('Marca al menos un encargo');
         for (const id of ids) {
           const o = order(id);
@@ -503,7 +526,7 @@ export function bulkShipPage() {
         }
         await commit();
         pg.close();
-        snackbar(`${ids.length} encargo${ids.length === 1 ? '' : 's'} enviado${ids.length === 1 ? '' : 's'} a Cuba`);
+        snackbar(`${ids.length} encargo${ids.length === 1 ? '' : 's'} enviado${ids.length === 1 ? '' : 's'} por ${methodLabel(d.method).toLowerCase()}`);
       },
     },
   });
@@ -601,12 +624,13 @@ export function clientText(o) {
   const k = orderCalc(o);
   const e = orderEta(o);
   const L = [`📦 *Tu encargo* — ${orderTitle(o)}`];
+  L.push(`Envío: ${methodLabel(methodOf(o))}`);
   L.push(`Estado: ${STATUS_LABEL[o.status]}${o.dates[STATUS_DATE[o.status]] ? ` (${fmtDate(o.dates[STATUS_DATE[o.status]])})` : ''}`);
   if (o.status === 'comprado' || o.status === 'almacen' || o.status === 'enviado') L.push(`Llegada aproximada a Cuba: ${fmtDate(e.cuba)}`);
   L.push('');
   L.push(`💵 *Precio: ${usd(k.total)}*`);
   L.push(`  • Producto${o.items.length > 1 ? 's' : ''}: ${usd(k.products)}`);
-  if (k.weight) L.push(`  • Envío ${lbs(k.lb)} × ${usd(o.lbPrice)}/lb: ${usd(k.weight)}${o.weightReal ? '' : ' (peso aproximado)'}`);
+  if (k.weight) L.push(`  • Envío ${methodLabel(methodOf(o)).toLowerCase()} ${lbs(k.lb)} × ${usd(o.lbPrice)}/lb: ${usd(k.weight)}${o.weightReal ? '' : ' (peso aproximado)'}`);
   if (k.fee) L.push(`  • Tarifa ${pct(o.feePct)}: ${usd(k.fee)}`);
   for (const x of o.extras || []) if (num(x.amount)) L.push(`  • ${x.label || 'Otro cargo'}: ${usd(x.amount)}`);
   if (k.paid) L.push(`Pagado: ${usd(k.paid)}${k.due > 0.004 ? ` · Falta: *${usd(k.due)}*` : ' ✅'}`);
