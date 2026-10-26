@@ -1,7 +1,7 @@
 // Service worker: guarda la app en el teléfono para usarla sin conexión y muestra los avisos de llegada.
 // Cambia VERSION en cada publicación para que los teléfonos descarguen la nueva versión.
 const PREFIX = 'import-business-';
-const VERSION = PREFIX + 'v1.1.0';
+const VERSION = PREFIX + 'v1.2.0';
 const ASSETS = [
   './',
   'index.html',
@@ -14,6 +14,7 @@ const ASSETS = [
   'js/ui.js',
   'js/icons.js',
   'js/orders.js',
+  'js/flights.js',
   'js/remit.js',
   'js/money.js',
   'js/closure.js',

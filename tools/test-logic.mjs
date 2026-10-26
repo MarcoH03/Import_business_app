@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 const S = await import('../js/store.js');
 const Y = await import('../js/sync.js');
 const ok = (m) => console.log('✓', m);
+const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 // Precio de un encargo
 const o = S.newOrder({ items: [{ desc: 'Zapatos', qty: 1, price: 40 }, { desc: 'Pomos', qty: 2, price: 5 }], weightLb: 3.2, lbPrice: 4.5, lbCost: 2.5 });
@@ -23,9 +24,51 @@ const air = S.newOrder({ method: 'aereo', weightLb: 10, items: [{ desc: 'x', qty
 const sea = S.newOrder({ method: 'maritimo', weightLb: 10, items: [{ desc: 'x', qty: 1, price: 20 }] });
 assert.equal(S.orderCalc(air).total, 65); assert.equal(S.orderCalc(air).shipCost, 25);
 assert.equal(S.orderCalc(sea).total, 45); assert.equal(S.orderCalc(sea).shipCost, 12);
-air.status = sea.status = 'enviado'; air.dates.shipped = sea.dates.shipped = '2026-10-01';
-assert.equal(S.orderEta(air).cuba, '2026-10-08'); assert.equal(S.orderEta(sea).cuba, '2026-10-31');
 ok('envío aéreo y marítimo');
+// Vuelos de los jueves: un encargo en el almacén el lunes 26/10 sale el jueves 29 y llega 2 días después
+{
+  const st = S.state;
+  const o1 = S.newOrder({ id: 'f1', method: 'aereo', items: [{ desc: 'A', qty: 1, price: 30, w: 2 }, { desc: 'B', qty: 1, price: 10, w: 1 }] });
+  assert.equal(S.orderLbs(o1), 3); assert.equal(S.orderCalc(o1).weight, 13.5); assert.equal(S.orderCalc(o1).shipCost, 7.5);
+  st.orders.push(o1);
+  // Llega solo el producto A: sigue «comprado»; llega B: «en el almacén»
+  o1.items[0].arrived = '2026-10-26'; S.syncOrderStatus(o1); assert.equal(o1.status, 'comprado');
+  o1.items[1].arrived = '2026-10-26'; S.syncOrderStatus(o1); assert.equal(o1.status, 'almacen');
+  assert.equal(S.nextDeparture('aereo', '2026-10-26'), '2026-10-29');
+  assert.equal(S.readyItems('aereo').length, 2);
+  // Otro encargo de 5 lb en el mismo vuelo. El vuelo pesó 10 lb reales (cajas) y costó 30 USD: 3.75 USD por lb declarada.
+  const o2 = S.newOrder({ id: 'f2', method: 'aereo', weightLb: 5, items: [{ desc: 'C', qty: 1, price: 50 }] });
+  o2.items[0].arrived = '2026-10-27'; S.syncOrderStatus(o2);
+  st.orders.push(o2);
+  const fl = { id: 'v1', n: 1, method: 'aereo', date: '2026-10-29', weight: 10, cost: 30, paidFrom: 'tarjeta', eta: '', arrived: null };
+  st.flights.push(fl);
+  for (const o of [o1, o2]) { for (const it of o.items) it.flight = 'v1'; S.syncOrderStatus(o); }
+  S.invalidate();
+  assert.equal(o1.status, 'enviado'); assert.equal(o1.dates.shipped, '2026-10-29');
+  assert.equal(S.orderCalc(o1).shipCost, 11.25); assert.equal(S.orderCalc(o2).shipCost, 18.75); assert.ok(S.orderCalc(o1).shipReal);
+  assert.equal(S.orderEta(o1).cuba, '2026-10-31');
+  const fc = S.flightCalc(fl);
+  assert.equal(fc.lbs, 8); assert.equal(fc.extraLb, 2); assert.equal(fc.cost, 30);
+  assert.equal(fc.revenue, S.orderCalc(o1).total + S.orderCalc(o2).total);
+  assert.equal(fc.profit, round2(fc.revenue - 90 - 30)); assert.equal(fc.doneProfit, 0);
+  // Solo el vuelo descuenta el envío de la tarjeta (los productos ya se descontaron al comprarlos).
+  const card = S.moneyEntries('tarjeta').filter((e) => e.kind === 'flight');
+  assert.equal(card.length, 1); assert.equal(card[0].amount, -30);
+  assert.ok(!S.moneyEntries('tarjeta').some((e) => e.label === 'Envío a Cuba'));
+  // Entregar o1: la ganancia de la vuelta va subiendo con lo entregado
+  o1.status = 'entregado'; o1.dates.delivered = '2026-11-01'; S.invalidate();
+  assert.equal(S.flightCalc(fl).doneProfit, S.orderCalc(o1).profit);
+  // Llega el vuelo: el otro encargo pasa a «en Cuba»
+  fl.arrived = '2026-10-31'; S.syncOrderStatus(o2); assert.equal(o2.status, 'cuba'); assert.equal(o2.dates.cuba, '2026-10-31');
+  // Aportes de un inversionista
+  st.workers.push({ id: 'p1', name: 'Tío Juan', kind: 'inversionista' });
+  st.capital.push({ id: 'c1', date: '2026-10-01', personId: 'p1', type: 'aporte', amount: 500, account: 'tarjeta' }, { id: 'c2', date: '2026-10-20', personId: 'p1', type: 'devolucion', amount: 200, account: 'efectivo' });
+  assert.deepEqual([S.personCapital('p1').put, S.personCapital('p1').back, S.personCapital('p1').owed], [500, 200, 300]);
+  const stt = S.stats('2026-10-01', '2026-10-31');
+  assert.equal(stt.income.tarjeta, 0, 'un aporte no es un ingreso');
+  st.orders.length = 0; st.flights.length = 0; st.workers.length = 0; st.capital.length = 0; S.invalidate();
+}
+ok('productos, vuelos de los jueves, costo real repartido y aportes');
 // Lectura de fechas de llegada
 const ref = '2026-10-07';
 assert.equal(S.parseArrival('Arriving Tuesday, October 14', ref), '2026-10-14');

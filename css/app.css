@@ -833,3 +833,27 @@ html.ios[data-theme="dark"] .dialog, html.ios[data-theme="dark"] .bs-group, html
 .form .card .lbl, .form .card > b { display: block; }
 .ios .dialog-btns button, .ios .dialog-btns .btn.filled, .ios .dialog-btns .btn.sm { height: 44px !important; border-radius: 0 !important; padding: 0 8px !important; font-size: 17px !important; box-shadow: none; display: flex; align-items: center; }
 .sec-t > span > .ic { width: 18px; height: 18px; vertical-align: -3px; margin-right: 4px; }
+
+/* versión 1.2: productos con peso y llegada, vuelos */
+.row3 { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, .8fr) minmax(0, 1fr); gap: 8px; }
+.row3 .tf { padding: 0 10px; }
+.row3 .tf-suf { margin-left: 4px; font-size: 13px; }
+.inp.ro { display: flex; align-items: center; color: var(--on-surface); }
+.item-li { text-align: left; align-items: flex-start; }
+.item-li .cbox { margin-top: 2px; }
+.item-li .cbox input { pointer-events: none; }
+.item-li.on .t { color: var(--on-surface); }
+.item-li:disabled { opacity: 1; }
+.item-li:disabled .cbox span { opacity: .6; }
+.link-t { color: var(--primary); font-weight: 500; text-decoration: none; }
+.arrive-li { gap: 12px; }
+.mini-w { display: flex; align-items: center; gap: 4px; flex: none; color: var(--on-surface-variant); font-size: 13px; }
+.mini-w .inp { width: 64px; height: 40px; border: 1px solid var(--outline); border-radius: 8px; text-align: center; background: none; font-size: 15px; outline: 0; padding: 0 4px; }
+.mini-w .inp:focus { border-color: var(--primary); }
+.group-li { min-height: 40px; padding-top: 12px; padding-bottom: 4px; background: var(--surface-container); }
+.group-li .t { font-weight: 500; font-size: 14px; }
+.sub-li { padding-left: 28px; }
+.ios .group-li { background: var(--fill); }
+.ios .mini-w .inp { border: 0; background: var(--fill); }
+.ios .row3 .tf { padding: 22px 10px 4px; }
+.sec-r > span { font-size: 13px; }

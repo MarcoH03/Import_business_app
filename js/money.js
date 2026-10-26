@@ -2,11 +2,13 @@
 import { icon } from './icons.js';
 import {
   state, uid, num, round2, usd, today, fmtDate, fmtTime, fmtDateLong, ACCOUNTS, ACC_SHORT, BIZ, MOVE_TYPES, balance, moneyEntries, worker, workerName, sum,
+  PERSON_KINDS, personKind, isWorker, personCapital, capitalTotals, CAPITAL_TYPES,
 } from './store.js';
 import { $, esc, openPage, topPage, confirmDlg, promptDlg, snackbar, seg, chips, tf, inp, numInp, li, kv, secTitle, emptyState, contactBtns } from './ui.js';
 import { commit } from './core.js';
 import { orderDetail } from './orders.js';
 import { remitDetail } from './remit.js';
+import { flightDetail } from './flights.js';
 
 export const ACC_ICON = { tarjeta: 'card', efectivo: 'cash' };
 const BIZ_CHOICES = Object.entries({ encargos: 'Encargos', remesas: 'Remesas', ambos: 'Los dos' });
@@ -80,29 +82,41 @@ async function deleteRec(col, id, msg) {
 }
 
 /* ======================= trabajadores ======================= */
+/* ======================= personas: trabajadores e inversionistas ======================= */
+const KIND_ICON = { trabajador: 'work', inversionista: 'trendUp', ambos: 'users' };
 export function workersPage() {
   openPage({
-    title: 'Trabajadores',
+    title: 'Trabajadores e inversionistas',
     nav: 'back',
     live: true,
     render: () => {
       const list = state.workers.filter((w) => !w.archived);
       const month = today().slice(0, 7);
+      const tot = capitalTotals();
       return `
+        ${tot.put ? `<div class="card">${kv('Aportado al negocio', usd(tot.put))}${kv('Devuelto', usd(tot.back))}<div class="divider"></div>${kv('Falta por devolver', usd(tot.owed), tot.owed > 0 ? 'amber big' : 'green big')}</div>` : ''}
         ${list.length ? `<div class="list">${list.map((w) => {
           const paid = sum(state.payroll.filter((p) => p.workerId === w.id && p.date.startsWith(month)), (p) => p.amount);
-          return li({ act: 'worker', attrs: `data-id="${w.id}"`, ic: 'work', color: 'purple', title: esc(w.name), sub: esc([w.role, w.phone].filter(Boolean).join(' · ')), right: paid ? `<small>este mes</small><b>${usd(paid)}</b>` : '' });
-        }).join('')}</div>` : emptyState('work', 'Añade a las personas que trabajan para el negocio (mensajeros, ayudantes…) para anotar lo que se les paga.')}
-        <button class="btn tonal block" data-act="newWorker">${icon('plus')} Añadir trabajador</button>
-        ${secTitle('Últimos pagos')}
-        <div class="list">${payrollList(state.payroll, 30)}</div>`;
+          const cap = personCapital(w.id);
+          return li({
+            act: 'worker', attrs: `data-id="${w.id}"`, ic: KIND_ICON[personKind(w)], color: personKind(w) === 'trabajador' ? 'purple' : 'blue', title: esc(w.name),
+            sub: esc([PERSON_KINDS[personKind(w)], w.role, w.phone].filter(Boolean).join(' · ')),
+            right: cap.owed > 0.004 ? `<small>se le debe</small><b class="amber-t">${usd(cap.owed)}</b>` : paid ? `<small>pagado este mes</small><b>${usd(paid)}</b>` : '',
+          });
+        }).join('')}</div>` : emptyState('users', 'Añade a quienes trabajan para el negocio (mensajeros, ayudantes…) y a quienes ponen dinero en él, para llevar lo que se les paga y lo que hay que devolverles.')}
+        <button class="btn tonal block" data-act="newWorker">${icon('plus')} Añadir persona</button>
+        ${secTitle('Últimos pagos a trabajadores')}
+        <div class="list">${payrollList(state.payroll, 20)}</div>
+        ${state.capital.length ? `${secTitle('Últimos aportes y devoluciones')}<div class="list">${capitalList(state.capital, 20)}</div>` : ''}`;
     },
-    footer: () => (state.workers.some((w) => !w.archived) ? `<button class="btn filled block lg" data-act="pay">${icon('cash')} Pagar a un trabajador</button>` : ''),
+    footer: () => (state.workers.some((w) => !w.archived) ? `<div class="btn-row"><button class="btn tonal grow" data-act="capital">${icon('inbox')} Aporte</button><button class="btn filled grow" data-act="pay">${icon('cash')} Pagar</button></div>` : ''),
     acts: {
       worker: (el) => workerPage(el.dataset.id),
       newWorker: () => workerEditor(),
       pay: () => payrollEditor(),
       payroll: (el) => payrollEditor(el.dataset.id),
+      capital: () => capitalEditor(),
+      cap: (el) => capitalEditor(el.dataset.id),
     },
   });
 }
@@ -116,16 +130,25 @@ export const payrollRow = (p) => li({
   title: esc(workerName(p.workerId)), sub: [fmtDate(p.date), p.note ? esc(p.note) : '', ACC_SHORT[p.account], BIZ[p.biz] || ''].filter(Boolean).join(' · '),
   right: `<b>−${usd(p.amount)}</b>`,
 });
+export function capitalList(list, max = 50) {
+  const l = [...list].sort((a, b) => b.date.localeCompare(a.date) || b.ts - a.ts).slice(0, max);
+  return l.length ? l.map(capitalRow).join('') : '<div class="empty-li">Sin aportes anotados</div>';
+}
+export const capitalRow = (c) => li({
+  act: 'cap', attrs: `data-id="${c.id}"`, ic: c.type === 'devolucion' ? 'outbox' : 'inbox', color: c.type === 'devolucion' ? 'amber' : 'blue',
+  title: `${c.type === 'devolucion' ? 'Devuelto a' : 'Aporte de'} ${esc(workerName(c.personId))}`, sub: [fmtDate(c.date), c.note ? esc(c.note) : '', ACC_SHORT[c.account]].filter(Boolean).join(' · '),
+  right: `<b>${c.type === 'devolucion' ? '−' : '+'}${usd(c.amount)}</b>`,
+});
 
 function workerPage(id) {
   openPage({
-    title: 'Trabajador',
+    title: 'Persona',
     nav: 'back',
     live: true,
     menu: () => [
       { label: 'Editar', ic: 'edit', value: () => workerEditor(id) },
-      { label: 'Ya no trabaja con nosotros', ic: 'trash', danger: true, value: async () => {
-        if (!(await confirmDlg('Quitar trabajador', 'Se oculta de la lista; sus pagos anteriores se conservan.', 'Quitar', true))) return;
+      { label: 'Ya no está en el negocio', sub: 'Se oculta; lo anotado se conserva', ic: 'trash', danger: true, value: async () => {
+        if (!(await confirmDlg('Quitar persona', 'Se oculta de la lista; sus pagos y aportes anteriores se conservan.', 'Quitar', true))) return;
         worker(id).archived = true;
         await commit();
         topPage()?.close();
@@ -133,38 +156,57 @@ function workerPage(id) {
     ],
     render: () => {
       const w = worker(id);
-      if (!w) return emptyState('work', 'No existe.');
+      if (!w) return emptyState('users', 'No existe.');
       const pays = state.payroll.filter((p) => p.workerId === id);
       const month = today().slice(0, 7);
+      const cap = personCapital(id);
+      const showCap = personKind(w) !== 'trabajador' || cap.list.length;
       return `
-        <div class="hero"><div class="hero-main"><span class="hero-n sm">${esc(w.name)}</span><span class="hero-u">${esc(w.role || 'Trabajador')}${w.phone ? ` · ${esc(w.phone)}` : ''}</span></div>
-          <div class="hero-badges"><span class="badge">Este mes: ${usd(sum(pays.filter((p) => p.date.startsWith(month)), (p) => p.amount))}</span><span class="badge">Total: ${usd(sum(pays, (p) => p.amount))}</span></div>
+        <div class="hero"><div class="hero-main"><span class="hero-n sm">${esc(w.name)}</span><span class="hero-u">${esc([PERSON_KINDS[personKind(w)], w.role, w.phone].filter(Boolean).join(' · '))}</span></div>
+          <div class="hero-badges">${isWorker(w) ? `<span class="badge">Pagado este mes: ${usd(sum(pays.filter((p) => p.date.startsWith(month)), (p) => p.amount))}</span>` : ''}${cap.owed > 0.004 ? `<span class="badge amber">Se le debe ${usd(cap.owed)}</span>` : ''}</div>
           ${contactBtns(w.phone)}</div>
-        <button class="btn filled block lg" data-act="pay">${icon('cash')} Pagarle</button>
-        ${secTitle('Pagos')}<div class="list">${payrollList(pays, 100)}</div>`;
+        ${showCap ? `${secTitle('Dinero que ha puesto en el negocio')}
+          <div class="card">${kv('Aportado', usd(cap.put))}${kv('Devuelto', usd(cap.back))}<div class="divider"></div>${kv('Falta por devolverle', usd(cap.owed), cap.owed > 0.004 ? 'amber big' : 'green big')}</div>
+          <div class="btn-row pad-h"><button class="btn tonal grow" data-act="put">${icon('inbox')} Anotar aporte</button><button class="btn tonal grow" data-act="back" ${cap.owed <= 0 ? 'disabled' : ''}>${icon('outbox')} Devolverle</button></div>
+          <div class="list mt">${capitalList(cap.list, 100)}</div>` : ''}
+        ${isWorker(w) ? `${secTitle('Pagos por su trabajo', `<button class="text-btn" data-act="pay">Pagarle</button>`)}<div class="list">${payrollList(pays, 100)}</div>` : ''}
+        ${!showCap ? `<button class="btn text block" data-act="put">${icon('inbox')} Anotar dinero que puso en el negocio</button>` : ''}`;
     },
-    acts: { pay: () => payrollEditor(null, { workerId: id }), payroll: (el) => payrollEditor(el.dataset.id) },
+    acts: {
+      pay: () => payrollEditor(null, { workerId: id }),
+      payroll: (el) => payrollEditor(el.dataset.id),
+      put: () => capitalEditor(null, { personId: id, type: 'aporte' }),
+      back: () => capitalEditor(null, { personId: id, type: 'devolucion', amount: String(personCapital(id).owed) }),
+      cap: (el) => capitalEditor(el.dataset.id),
+    },
   });
 }
 
-function workerEditor(id = null) {
+function workerEditor(id = null, prefill = {}) {
   const w = id ? worker(id) : null;
-  const d = { name: w?.name || '', role: w?.role || '', phone: w?.phone || '' };
+  const d = { name: w?.name || '', role: w?.role || '', phone: w?.phone || '', kind: w ? personKind(w) : 'trabajador', ...prefill };
   openPage({
-    title: w ? 'Editar trabajador' : 'Nuevo trabajador',
+    title: w ? 'Editar persona' : 'Nueva persona',
     data: d,
     action: { label: 'Guardar', act: 'save' },
     render: () => `<div class="form">
       ${tf('Nombre', inp('name', d.name, 'autocapitalize="words"'))}
-      ${tf('Qué hace (opcional)', inp('role', d.role, 'placeholder="Ej. mensajero, entrega remesas"'))}
+      <div class="lbl">¿Qué es en el negocio?</div>
+      ${seg('kind', [['trabajador', 'Trabajador'], ['inversionista', 'Inversionista'], ['ambos', 'Los dos']], d.kind)}
+      <div class="tf-help">A un trabajador se le pagan sus servicios; a un inversionista se le anota el dinero que pone para devolvérselo después.</div>
+      ${tf('Qué hace (opcional)', inp('role', d.role, 'placeholder="Ej. mensajero, socio, mi tío en Miami"'))}
       ${tf('Teléfono (opcional)', inp('phone', d.phone, 'type="tel" inputmode="tel"'))}
     </div>`,
     acts: {
+      seg: (el, ev, pg) => {
+        d.kind = el.dataset.v;
+        pg.render();
+      },
       save: async (el, ev, pg) => {
         if (!d.name.trim()) return snackbar('Escribe el nombre');
         const cur = id ? worker(id) : null;
         const rec = cur || { id: uid(), ts: Date.now(), archived: false };
-        Object.assign(rec, { name: d.name.trim(), role: d.role.trim(), phone: d.phone.trim() });
+        Object.assign(rec, { name: d.name.trim(), role: d.role.trim(), phone: d.phone.trim(), kind: d.kind });
         if (!cur) state.workers.push(rec);
         await commit();
         pg.close();
@@ -173,9 +215,62 @@ function workerEditor(id = null) {
   });
 }
 
+/** Aporte de dinero al negocio o devolución a quien lo puso. Entra o sale de la cuenta, pero no es ganancia ni gasto. */
+export function capitalEditor(id = null, prefill = {}) {
+  const ex = id ? state.capital.find((c) => c.id === id) : null;
+  const people = state.workers.filter((w) => !w.archived || w.id === ex?.personId);
+  if (!people.length) return workerEditor(null, { kind: 'inversionista' });
+  const firstInv = people.find((w) => personKind(w) !== 'trabajador') || people[0];
+  const d = ex
+    ? { personId: ex.personId, type: ex.type, amount: String(ex.amount), account: ex.account, date: ex.date, note: ex.note || '' }
+    : { personId: firstInv.id, type: 'aporte', amount: '', account: 'tarjeta', date: today(), note: '', ...prefill };
+  openPage({
+    title: ex ? 'Editar' : d.type === 'devolucion' ? 'Devolver dinero' : 'Aporte al negocio',
+    data: d,
+    action: { label: 'Guardar', act: 'save' },
+    menu: ex ? () => [{ label: 'Eliminar', ic: 'trash', danger: true, value: () => deleteRec('capital', ex.id, 'Eliminado') }] : null,
+    render: () => {
+      const cap = personCapital(d.personId);
+      return `<div class="form">
+      ${seg('type', Object.entries({ aporte: 'Puso dinero', devolucion: 'Se le devolvió' }), d.type)}
+      <div class="lbl">¿Quién?</div>
+      ${chips('personId', people.map((w) => [w.id, w.name]), d.personId)}
+      <div class="card">${kv('Ha puesto', usd(cap.put))}${kv('Se le ha devuelto', usd(cap.back))}${kv('Falta por devolverle', usd(cap.owed), 'strong')}</div>
+      ${tf('Importe', numInp('amount', d.amount, 'placeholder="0"'), { suffix: 'USD' })}
+      <div class="lbl">${d.type === 'devolucion' ? '¿De dónde salió?' : '¿Dónde entró?'}</div>
+      ${seg('account', Object.entries(ACCOUNTS), d.account)}
+      ${tf('Fecha', `<input class="inp" type="date" data-bind="date" value="${d.date}">`)}
+      ${tf('Detalle (opcional)', inp('note', d.note, `placeholder="${d.type === 'devolucion' ? 'Ej. primera parte' : 'Ej. para comprar mercancía'}"`))}
+      <p class="hint">No cuenta como ganancia ni como gasto: solo entra o sale de la cuenta y suma o resta a lo que se le debe.</p>
+    </div>`;
+    },
+    acts: {
+      chip: (el, ev, pg) => {
+        d.personId = el.dataset.v;
+        pg.render();
+      },
+      seg: (el, ev, pg) => {
+        d[el.dataset.name] = el.dataset.v;
+        pg.render();
+      },
+      save: async (el, ev, pg) => {
+        if (num(d.amount) <= 0) return snackbar('Escribe el importe');
+        const cur = ex ? state.capital.find((c) => c.id === ex.id) : null;
+        const rec = cur || { id: uid(), ts: Date.now() };
+        Object.assign(rec, { personId: d.personId, type: d.type, amount: round2(num(d.amount)), account: d.account, date: d.date, note: d.note.trim() });
+        if (!cur) state.capital.push(rec);
+        await commit();
+        pg.close();
+        const owed = personCapital(rec.personId).owed;
+        snackbar(`${rec.type === 'devolucion' ? 'Devuelto' : 'Aporte de'} ${usd(rec.amount)} · se le debe ${usd(owed)}`);
+      },
+    },
+  });
+}
+
 export function payrollEditor(id = null, prefill = {}) {
   const ex = id ? state.payroll.find((p) => p.id === id) : null;
-  const ws = state.workers.filter((w) => !w.archived || w.id === ex?.workerId);
+  const ws = state.workers.filter((w) => (!w.archived && isWorker(w)) || w.id === ex?.workerId);
   const d = ex
     ? { workerId: ex.workerId, amount: String(ex.amount), account: ex.account, biz: ex.biz, date: ex.date, note: ex.note || '' }
     : { workerId: ws[0]?.id || '', amount: '', account: 'efectivo', biz: 'ambos', date: today(), note: '', ...prefill };
@@ -265,6 +360,8 @@ export const entryActs = {
   e_remit: (el) => remitDetail(el.dataset.id),
   e_expense: (el) => expenseEditor(el.dataset.id),
   e_payroll: (el) => payrollEditor(el.dataset.id),
+  e_flight: (el) => flightDetail(el.dataset.id),
+  e_capital: (el) => capitalEditor(el.dataset.id),
   e_move: (el) => {
     const m = state.moves.find((x) => x.id === el.dataset.id);
     if (m) moveEditor(m.account, m.type, m.id);

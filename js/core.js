@@ -1,5 +1,5 @@
 // Contexto compartido: pestaña actual, refresco de pantallas, guardado y compartir.
-import { save, local } from './store.js';
+import { save, local, invalidate } from './store.js';
 import { track } from './sync.js';
 import { pages, dialog, snackbar } from './ui.js';
 
@@ -19,6 +19,7 @@ export const onCommit = (f) => (afterCommit = f);
 
 /** Guarda: marca lo que cambió (para la sincronización), lo escribe en el teléfono y repinta. */
 export async function commit() {
+  invalidate();
   track();
   refresh();
   if (!(await save())) {

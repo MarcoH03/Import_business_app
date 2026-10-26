@@ -3,14 +3,15 @@ import { icon } from './icons.js';
 import {
   state, local, init, today, fmtDate, fmtDateLong, fmtTime, usd, lbs, pct, num, round2, norm, digits, parseDate, addDays, sum,
   ACCOUNTS, ACC_SHORT, STATUS_LABEL, balance, moneyEntries, pending, upcoming, orderCalc, orderTitle, clientLabel, transitStats,
-  isOpen, METHODS, methodOf, methodLabel, activeRemits, pendingRemits, remitCalc, stats, buckets, periodRange, closureOutdated, APP_VERSION, BIZ, saveLocal,
+  isOpen, METHODS, methodOf, methodLabel, readyItems, nextDeparture, flightCalc, capitalTotals, personCapital, activeRemits, pendingRemits, remitCalc, stats, buckets, periodRange, closureOutdated, APP_VERSION, BIZ, saveLocal,
 } from './store.js';
 import { $, esc, seg, chips, li, kv, secTitle, emptyState, menuSheet, histPush, histBack, onBackWithoutLayer, openLayers, snackbar, isIOS } from './ui.js';
 import { ctx, onRefresh, refresh, onCommit, shareText } from './core.js';
 import { resetSnapshot, onSyncChange, syncStatus, lastSyncLabel } from './sync.js';
-import { orderEditor, orderDetail, orderRow, bulkShipPage, clientsPage, statusBadge, etaLine } from './orders.js';
+import { orderEditor, orderDetail, orderRow, bulkShipPage, clientsPage, statusBadge, etaLine, departureLabel } from './orders.js';
+import { flightsPage, flightEditor, flightDetail, flightRow } from './flights.js';
 import { remitEditor, remitDetail, remitRow, pendingText } from './remit.js';
-import { expenseEditor, expenseRow, payrollEditor, payrollList, workersPage, accountPage, entryRow, entryActs, ACC_ICON } from './money.js';
+import { expenseEditor, expenseRow, payrollEditor, payrollList, workersPage, accountPage, entryRow, entryActs, ACC_ICON, capitalEditor, capitalList } from './money.js';
 import { closurePage } from './closure.js';
 import { settingsPage, welcomePage, exportBackup, installApp, canInstall, onInstallChange, syncPage, runSync, checkNotifications } from './settings.js';
 
@@ -78,12 +79,13 @@ function viewInicio() {
       ${action('receipt', 'Gasto', 'newExpense', 'amber')}
       ${action('clipboard', 'Cierre', 'closure', 'purple')}
     </div>
+    ${readyRows()}
     ${late.length ? `${secTitle(`<span class="red-t">Atrasados</span>`)}<div class="list">${late.map((x) => alertRow(x, true)).join('')}</div>` : ''}
     ${soon.length ? `${secTitle('Llegan pronto')}<div class="list">${soon.map((x) => alertRow(x)).join('')}</div>` : ''}
-    ${up.inCuba.length || pend.remitsN || up.atWarehouse.length || pend.dueN ? `${secTitle('Pendiente')}<div class="list">
+    ${up.trips.length ? `${secTitle('En camino a Cuba')}<div class="list">${up.trips.sort((a, b) => b.date.localeCompare(a.date)).map(flightRow).join('')}</div>` : ''}
+    ${up.inCuba.length || pend.remitsN || pend.dueN ? `${secTitle('Pendiente')}<div class="list">
       ${up.inCuba.length ? li({ act: 'goFilter', attrs: 'data-f="cuba"', ic: 'pin', color: 'green', title: `${plural(up.inCuba.length, 'encargo', 'encargos')} en Cuba para entregar`, sub: esc(up.inCuba.slice(0, 4).map((x) => clientLabel(x.o.client)).join(', ')) }) : ''}
       ${pend.remitsN ? li({ act: 'goRemits', ic: 'send', color: 'teal', title: `${plural(pend.remitsN, 'remesa', 'remesas')} por entregar`, sub: cash < pend.remits ? `<span class="red-t">${icon('warning')}El efectivo (${usd(cash)}) no alcanza</span>` : 'Con dirección y teléfono', right: `<b>${usd(pend.remits)}</b>` }) : ''}
-      ${up.atWarehouse.length ? li({ act: 'goFilter', attrs: 'data-f="almacen"', ic: 'store', color: 'purple', title: `${plural(up.atWarehouse.length, 'encargo', 'encargos')} en el almacén sin enviar`, sub: byMethodLine(up.atWarehouse) }) : ''}
       ${pend.dueN ? li({ act: 'goFilter', attrs: 'data-f="debe"', ic: 'cash', color: 'amber', title: 'Por cobrar a clientes', sub: plural(pend.dueN, 'encargo', 'encargos'), right: `<b>${usd(pend.due)}</b>` }) : ''}
     </div>` : ''}
     ${secTitle('Hoy')}
@@ -106,13 +108,24 @@ function viewInicio() {
     ${backupOld && (state.orders.length || state.remits.length) ? `<button class="banner" data-act="backup">${icon('shield')}<span>${local.lastBackup ? `Última copia de seguridad: ${fmtDate(local.lastBackup)}.` : 'Aún no has hecho una copia de seguridad.'} Toca para hacerla.</span>${icon('chevR')}</button>` : ''}
     <div class="spacer"></div>`;
 }
-/** «2 aéreo (3.4 lb) · 1 marítimo (12 lb)» */
-export function byMethodLine(list) {
-  return Object.keys(METHODS).map((m) => {
-    const l = list.filter((o) => methodOf(o) === m);
-    return l.length ? `${l.length} ${methodLabel(m).toLowerCase()} (${lbs(sum(l, (o) => orderCalc(o).lb))})` : '';
-  }).filter(Boolean).join(' · ');
+/** Productos que esperan en el almacén el próximo vuelo (o barco); el día de salida se destaca. */
+function readyRows() {
+  const rows = Object.keys(METHODS).map((m) => {
+    const l = readyItems(m);
+    if (!l.length) return '';
+    const dep = nextDeparture(m);
+    const isToday = dep === today() && METHODS[m] && state.settings[METHODS[m].depart] >= 0;
+    const nOrders = new Set(l.map((x) => x.o.id)).size;
+    return isToday
+      ? `<button class="banner blue" data-act="newFlight" data-m="${m}">${icon(METHODS[m].ic)}<span><b>Hoy sale el ${METHODS[m].trip.toLowerCase()}.</b> ${plural(l.length, 'producto', 'productos')} de ${plural(nOrders, 'encargo', 'encargos')} en el almacén (${lbs(sum(l, (x) => x.lb))}). Toca para anotarlo con su peso y precio.</span>${icon('chevR')}</button>`
+      : li({ act: 'newFlight', attrs: `data-m="${m}"`, ic: 'store', color: 'purple', title: `${plural(l.length, 'producto listo', 'productos listos')} para el ${METHODS[m].trip.toLowerCase()} ${departureLabel(dep) === 'hoy' ? 'de hoy' : `del ${departureLabel(dep).replace(/^el /, '')}`}`, sub: `${methodLabel(m)} · ${plural(nOrders, 'encargo', 'encargos')} · ${lbs(sum(l, (x) => x.lb))}` });
+  }).filter(Boolean);
+  if (!rows.length) return '';
+  const banners = rows.filter((r) => r.startsWith('<button class="banner'));
+  const items = rows.filter((r) => !r.startsWith('<button class="banner'));
+  return `${banners.join('')}${items.length ? `${secTitle('En el almacén')}<div class="list">${items.join('')}</div>` : ''}`;
 }
+
 function alertRow(x, late = false) {
   const toWh = x.o.status === 'comprado';
   return li({
@@ -150,14 +163,14 @@ function ordersList() {
   if (!state.orders.length) return emptyState('pkg', 'Anota aquí cada encargo: quién lo pidió, qué compraste, cuánto pagaste y cuánto pesa. La app calcula el precio y te avisa cuando debe llegar.', '<button class="btn filled" data-act="newOrder">Nuevo encargo</button>');
   if (!list.length) return '<div class="empty-li">No hay encargos en esta lista</div>';
   const total = round2(sum(list, (o) => orderCalc(o).total));
-  return `${filter === 'almacen' ? `<button class="btn filled block" data-act="bulkShip">${icon('plane')} Enviar a Cuba (${list.length})</button>` : ''}
+  return `${filter === 'almacen' && readyItems().length ? `<button class="btn filled block" data-act="bulkShip">${icon('plane')} Anotar el vuelo con lo del almacén (${plural(readyItems().length, 'producto', 'productos')})</button>` : ''}
     <div class="list-head">${plural(list.length, 'encargo', 'encargos')} · ${usd(total)}</div>
     <div class="list">${list.map((o) => orderRow(o, ts)).join('')}</div>`;
 }
 function viewEncargos() {
   const counts = Object.fromEntries(FILTERS.map(([k, , f]) => [k, state.orders.filter(f).length]));
   return `
-    ${appbar('Encargos', tbBtn('users', 'clients', 'Clientes') + addBtn('newOrder', 'Nuevo encargo'))}
+    ${appbar('Encargos', tbBtn('plane', 'flights', 'Vuelos') + tbBtn('users', 'clients', 'Clientes') + addBtn('newOrder', 'Nuevo encargo'))}
     <div class="search"><span>${icon('search')}</span><input type="search" data-input="orderQ" placeholder="Cliente, teléfono, producto o seguimiento" value="${esc(vs.encargos.q)}"></div>
     ${chips('orderFilter', FILTERS.filter(([k]) => counts[k] || k === 'activos' || k === vs.encargos.filter || k === 'todos').map(([k, l]) => [k, `${l}${counts[k] && k !== 'todos' ? ` · ${counts[k]}` : ''}`]), vs.encargos.filter)}
     <div id="order-list">${ordersList()}</div>
@@ -211,8 +224,17 @@ function viewDinero() {
   } else if (g.mode === 'pagos') {
     const list = state.payroll.filter(inR);
     body = `${monthNav(pr, `Pagado: ${usd(sum(list, (x) => x.amount))}`)}
-      <div class="btn-row wrap pad-h"><button class="btn tonal sm" data-act="workers">${icon('users')} Trabajadores</button></div>
+      <div class="btn-row wrap pad-h"><button class="btn tonal sm" data-act="workers">${icon('users')} Trabajadores e inversionistas</button></div>
       <div class="list">${payrollList(list, 200)}</div>`;
+  } else if (g.mode === 'aportes') {
+    const list = state.capital.filter(inR);
+    const tot = capitalTotals();
+    const owed = state.workers.map((w) => ({ w, c: personCapital(w.id) })).filter((x) => x.c.owed > 0.004);
+    body = `<div class="card">${kv('Aportado al negocio (todo)', usd(tot.put))}${kv('Devuelto', usd(tot.back))}<div class="divider"></div>${kv('Falta por devolver', usd(tot.owed), tot.owed > 0.004 ? 'amber big' : 'green big')}</div>
+      ${owed.length ? `<div class="list">${owed.map((x) => li({ act: 'workers', title: esc(x.w.name), sub: `Puso ${usd(x.c.put)} · devuelto ${usd(x.c.back)}`, right: `<b class="amber-t">${usd(x.c.owed)}</b>` })).join('')}</div>` : ''}
+      ${monthNav(pr, `Aportes ${usd(sum(list.filter((c) => c.type === 'aporte'), (c) => c.amount))} · devuelto ${usd(sum(list.filter((c) => c.type === 'devolucion'), (c) => c.amount))}`)}
+      <div class="list">${capitalList(list, 200)}</div>
+      <p class="hint">Dinero que ponen los trabajadores o inversionistas y lo que se les devuelve. Entra o sale de la cuenta, pero no cuenta como ganancia ni gasto.</p>`;
   } else {
     const all = [...moneyEntries('tarjeta').map((e) => ({ ...e, acc: 'tarjeta' })), ...moneyEntries('efectivo').map((e) => ({ ...e, acc: 'efectivo' }))].filter(inR).sort((a, b) => b.date.localeCompare(a.date) || b.ts - a.ts);
     body = `${monthNav(pr, `${all.length} movimientos`)}
@@ -229,10 +251,10 @@ function viewDinero() {
       ${p.toReceive ? kv('Transferencias por llegar a la tarjeta', usd(p.toReceive)) : ''}
       ${kv('Envíos a Cuba aún por pagar (aprox.)', usd(p.ship), 'dim')}
     </div>
-    <div class="pad-h">${seg('dineroMode', [['gastos', 'Gastos'], ['pagos', 'Trabajadores'], ['movs', 'Movimientos']], g.mode)}</div>
+    <div class="pad-h">${seg('dineroMode', [['gastos', 'Gastos'], ['pagos', 'Pagos'], ['aportes', 'Aportes'], ['movs', 'Movim.']], g.mode)}</div>
     ${body}
     <div class="spacer"></div>
-    ${fab('dineroAdd', g.mode === 'pagos' ? 'Pagar' : g.mode === 'movs' ? 'Movimiento' : 'Nuevo gasto')}`;
+    ${fab('dineroAdd', g.mode === 'pagos' ? 'Pagar' : g.mode === 'aportes' ? 'Aporte o devolución' : g.mode === 'movs' ? 'Movimiento' : 'Nuevo gasto')}`;
 }
 function monthNav(pr, sub) {
   return `<div class="period-nav">
@@ -367,6 +389,14 @@ function viewInformes() {
       ${kv('Gastos / trabajadores', `${usd(st.expenses)} / ${usd(st.payroll)}`, 'dim')}
       ${st.bought.length ? kv(`Compras hechas (${st.bought.length})`, usd(st.boughtTotal), 'dim') : ''}
     </div>
+    ${st.flights.length ? `${secTitle('Vuelos y barcos del periodo')}
+    <div class="card">${(() => {
+      const cs = st.flights.map(flightCalc);
+      return `${kv(`${plural(st.flights.length, 'envío', 'envíos')} · ${lbs(sum(cs, (c) => c.lbs))} de productos`, `${usd(sum(cs, (c) => c.cost))} pagados`)}
+        ${kv('Ganancia prevista de esas vueltas', usd(sum(cs, (c) => c.profit)), 'strong')}
+        ${kv('Ya hecha (encargos entregados)', usd(sum(cs, (c) => c.doneProfit)), 'green strong')}`;
+    })()}</div>
+    <div class="list">${st.flights.map(flightRow).join('')}</div>` : ''}
     ${secTitle('Tiempos de llegada (todos los encargos)')}
     <div class="card">
       ${kv('Compra → almacén', days(ts.toWarehouse.avg), '')}
@@ -446,6 +476,10 @@ const acts = {
   workers: () => workersPage(),
   clients: () => clientsPage(),
   bulkShip: () => bulkShipPage(),
+  flights: () => flightsPage(),
+  flight: (el) => flightDetail(el.dataset.id),
+  newFlight: (el) => flightEditor(null, { method: el.dataset.m }),
+  cap: (el) => capitalEditor(el.dataset.id),
   goReports: () => setTab('informes'),
   goRemits: () => {
     vs.remesas.filter = 'pendientes';
@@ -461,10 +495,12 @@ const acts = {
     const m = vs.dinero.mode;
     if (m === 'gastos') return expenseEditor();
     if (m === 'pagos') return payrollEditor();
+    if (m === 'aportes') return capitalEditor();
     const a = await menuSheet({
       title: 'Movimiento de dinero',
       actions: [
-        { label: 'Añadir dinero', sub: 'Dinero que ponen los socios', ic: 'inbox', value: () => import('./money.js').then((x) => x.moveEditor('efectivo', 'aporte')) },
+        { label: 'Aporte de un socio o inversionista', sub: 'Para llevar lo que hay que devolverle', ic: 'users', value: () => capitalEditor() },
+        { label: 'Añadir dinero', sub: 'Sin apuntarlo a nadie', ic: 'inbox', value: () => import('./money.js').then((x) => x.moveEditor('efectivo', 'aporte')) },
         { label: 'Retirar dinero', sub: 'Reparto de ganancias u otros', ic: 'outbox', value: () => import('./money.js').then((x) => x.moveEditor('efectivo', 'retiro')) },
         { label: 'Pasar entre tarjeta y efectivo', ic: 'swap', value: () => import('./money.js').then((x) => x.moveEditor('efectivo', 'traspaso')) },
         { label: 'Contar el dinero', sub: 'Corregir el saldo con lo que hay', ic: 'clipboard', value: () => import('./money.js').then((x) => x.moveEditor('efectivo', 'ajuste')) },

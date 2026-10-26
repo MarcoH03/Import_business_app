@@ -85,6 +85,25 @@ const URL = 'http://localhost:8080/?ui=android';
   assert.equal(sa.lb, 6);
   assert.equal(sa.sea, 35);
 
+  // Un vuelo y un aporte anotados en A llegan a B.
+  await run(A, async () => {
+    const S = await import('/js/store.js');
+    const C = await import('/js/core.js');
+    S.state.flights.push({ id: 'v1', n: 1, method: 'aereo', date: S.today(), weight: 5, cost: 12, paidFrom: 'tarjeta', eta: '', arrived: null });
+    S.order('o1').items[0].arrived = S.today();
+    S.order('o1').items[0].flight = 'v1';
+    S.syncOrderStatus(S.order('o1'));
+    S.state.workers.push({ id: 'p1', name: 'Tío', kind: 'inversionista' });
+    S.state.capital.push({ id: 'c1', ts: Date.now(), date: S.today(), personId: 'p1', type: 'aporte', amount: 300, account: 'tarjeta' });
+    await C.commit();
+    await (await import('/js/sync.js')).syncNow();
+  });
+  await run(B, async () => (await import('/js/sync.js')).syncNow());
+  const fb = await run(B, async () => { const S = await import('/js/store.js'); S.invalidate(); return { st: S.order('o1').status, ship: S.orderCalc(S.order('o1')).shipCost, owed: S.personCapital('p1').owed, card: S.balance('tarjeta') }; });
+  const fa = await run(A, async () => { const S = await import('/js/store.js'); return { card: S.balance('tarjeta') }; });
+  assert.deepEqual([fb.st, fb.ship, fb.owed], ['enviado', 12, 300]);
+  assert.equal(fb.card, fa.card);
+
   // Borrado en B se propaga a A.
   await run(B, async () => { const S = await import('/js/store.js'); const C = await import('/js/core.js'); S.state.orders = []; await C.commit(); await (await import('/js/sync.js')).syncNow(); });
   await run(A, async () => (await import('/js/sync.js')).syncNow());
