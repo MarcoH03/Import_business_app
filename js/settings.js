@@ -1,7 +1,7 @@
 // Ajustes, bienvenida, copias de seguridad, avisos, instalación y sincronización (beta).
 import { icon } from './icons.js';
 import {
-  state, local, num, usd, METHODS, today, fmtDate, fmtTime, uid, replaceState, defaultState, saveLocal, APP_VERSION, idbGet, idbPut, reminders,
+  state, local, num, usd, METHODS, WEEKDAY_NAMES, today, fmtDate, fmtTime, uid, replaceState, defaultState, saveLocal, APP_VERSION, idbGet, idbPut, reminders,
 } from './store.js';
 import {
   esc, openPage, topPage, dialog, confirmDlg, promptDlg, snackbar, tf, inp, numInp, chips, seg, toggle, li, kv, secTitle,
@@ -176,10 +176,12 @@ export function settingsPage() {
             ${tf('Cobro por libra', numInp(x.price, pg.data[x.price]), { suffix: 'USD' })}
             ${tf('Nos cuesta la libra', numInp(x.cost, pg.data[x.cost]), { suffix: 'USD' })}
           </div>
-          ${tf('Del almacén a Cuba', numInp(x.days, pg.data[x.days], 'inputmode="numeric"'), { suffix: 'días' })}
+          <div class="lbl">Sale ${x.trip === 'Vuelo' ? 'el vuelo' : 'el barco'}</div>
+          ${chips(`dep:${x.depart}`, [[-1, 'Cualquier día'], ...[1, 2, 3, 4, 5, 6, 0].map((i) => [i, WEEKDAY_NAMES[i].slice(0, 3)])], S[x.depart] ?? -1, 'depChip')}
+          ${tf('Desde que sale hasta Cuba', numInp(x.days, pg.data[x.days], 'inputmode="numeric"'), { suffix: 'días' })}
         </div>`).join('')}
       <div class="form">
-        <div class="tf-help">Lo que se le cobra al cliente por libra y lo que nos cobra la agencia por enviarla a Cuba en cada método; la diferencia es ganancia. Con 3 o más envíos de un método, la app usa los días reales que tardaron.</div>
+        <div class="tf-help">Lo que se le cobra al cliente por libra y lo que calculas que cuesta enviarla. El costo es solo un estimado hasta que anotas el vuelo con su peso y precio reales. Lo que llega al almacén sale el siguiente día de salida; con 3 o más envíos de un método, la app usa los días reales que tardaron en llegar.</div>
         <div class="lbl">Método por defecto en los encargos nuevos</div>
         ${seg('defaultMethod', Object.entries(METHODS).map(([m, x]) => [m, x.label]), S.defaultMethod)}
       </div>
@@ -252,6 +254,10 @@ export function settingsPage() {
     acts: {
       chip: (el) => {
         S.roundTotal = num(el.dataset.v);
+        commit();
+      },
+      depChip: (el) => {
+        S[el.dataset.name.slice(4)] = num(el.dataset.v);
         commit();
       },
       seg: (el, ev, pg) => {

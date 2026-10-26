@@ -2,17 +2,17 @@
 import { icon } from './icons.js';
 import {
   state, num, round2, usd, lbs, today, addDays, fmtDate, fmtDateLong, fmtTime, closureData, saveClosure, closureOutdated,
-  orderTitle, clientLabel, orderCalc, METHODS, methodOf, methodLabel,
+  orderTitle, clientLabel, orderCalc, METHODS, methodOf, methodLabel, tripName, flightCalc, readyItems, workerName,
 } from './store.js';
 import { $, esc, openPage, dialog, snackbar, tf, inp, numInp, li, kv, secTitle } from './ui.js';
 import { commit, shareText } from './core.js';
 import { orderDetail } from './orders.js';
 import { remitDetail } from './remit.js';
 
-/** «2 aéreo (3.4 lb) · 1 marítimo (12 lb)» */
-const byMethod = (list) => Object.keys(METHODS).map((m) => {
-  const l = list.filter((o) => methodOf(o) === m);
-  return l.length ? `${l.length} ${methodLabel(m).toLowerCase()} (${lbs(l.reduce((a, o) => a + orderCalc(o).lb, 0))})` : '';
+/** «5 productos aéreo (6.2 lb) · 2 marítimo (12 lb)» de lo que espera en el almacén. */
+const readyLine = () => Object.keys(METHODS).map((m) => {
+  const l = readyItems(m);
+  return l.length ? `${l.length} ${methodLabel(m).toLowerCase()} (${lbs(l.reduce((a, x) => a + x.lb, 0))})` : '';
 }).filter(Boolean).join(' · ');
 const n = (x, one, many) => `${x} ${x === 1 ? one : many}`;
 
@@ -36,6 +36,11 @@ export function closureText(d, counted = '', note = '') {
   if (ev.bought.length) act.push(`${n(ev.bought.length, 'compra', 'compras')} (${usd(ev.bought.reduce((a, o) => a + orderCalc(o).products, 0))})`);
   if (ev.warehouse.length) act.push(`${ev.warehouse.length} al almacén`);
   if (ev.shipped.length) act.push(`${n(ev.shipped.length, 'enviado', 'enviados')} a Cuba`);
+  for (const f of d.flights) {
+    const c = flightCalc(f);
+    L.push(`✈️ Salió el ${tripName(f)}: ${n(c.items.length, 'producto', 'productos')}${num(f.weight) ? ` · ${lbs(f.weight)}` : ''}${c.hasCost ? ` · ${usd(f.cost)}` : ' · falta el precio'}`);
+  }
+  for (const f of d.flightsIn) L.push(`📍 Llegó a Cuba el ${tripName(f)}`);
   if (ev.cuba.length) act.push(`${ev.cuba.length} llegaron a Cuba`);
   if (ev.delivered.length) act.push(`${n(ev.delivered.length, 'entregado', 'entregados')}`);
   if (act.length) L.push(`🛍️ Encargos: ${act.join(' · ')}`);
@@ -45,7 +50,7 @@ export function closureText(d, counted = '', note = '') {
   L.push(`  Al empezar: ${usd(d.opening)}`);
   if (d.cashIn) L.push(`  + Entró: ${usd(d.cashIn)}`);
   if (d.cashOut) L.push(`  − Salió: ${usd(d.cashOut)}`);
-  if (d.moves) L.push(`  ${d.moves > 0 ? '+' : '−'} Movimientos: ${usd(Math.abs(d.moves))}`);
+  if (d.moves) L.push(`  ${d.moves > 0 ? '+' : '−'} Movimientos y aportes: ${usd(Math.abs(d.moves))}`);
   L.push(`  Debería haber: *${usd(d.expected)}*`);
   if (counted !== '' && counted !== null && counted !== undefined) {
     const diff = round2(num(counted) - d.expected);
@@ -61,7 +66,8 @@ export function closureText(d, counted = '', note = '') {
     L.push(`  Por llegar al almacén: ${up.toWarehouse.length}`);
     for (const x of up.toWarehouse.slice(0, 8)) L.push(`   – ${clientLabel(x.o.client)}: ${orderTitle(x.o)} · ${fmtDate(x.date)}${x.days < 0 ? ' (atrasado)' : ''}`);
   }
-  if (up.atWarehouse.length) L.push(`  En el almacén sin enviar: ${byMethod(up.atWarehouse)}`);
+  if (up.ready.length) L.push(`  En el almacén para el próximo envío: ${readyLine()}`);
+  for (const f of up.trips) L.push(`  En camino: ${tripName(f)} (${n(flightCalc(f).orders.length, 'encargo', 'encargos')})`);
   if (up.toCuba.length) {
     L.push(`  Por llegar a Cuba: ${up.toCuba.length}`);
     for (const x of up.toCuba.slice(0, 8)) L.push(`   – ${clientLabel(x.o.client)}: ${orderTitle(x.o)} · ${methodLabel(methodOf(x.o)).toLowerCase()} · ${fmtDate(x.date)}${x.days < 0 ? ' (atrasado)' : ''}`);
@@ -114,7 +120,9 @@ export function closurePage(date = today()) {
         <div class="list">
           ${evRow('card', 'blue', 'Compras hechas', c.events.bought, usd(c.events.bought.reduce((a, o) => a + orderCalc(o).products, 0)))}
           ${evRow('store', 'purple', 'Llegaron al almacén', c.events.warehouse)}
-          ${evRow('plane', 'teal', 'Enviados a Cuba', c.events.shipped)}
+          ${c.flights.map((f) => li({ act: 'flight', attrs: `data-id="${f.id}"`, ic: METHODS[f.method]?.ic || 'plane', color: 'teal', title: `Salió el ${esc(tripName(f))}`, sub: `${n(flightCalc(f).items.length, 'producto', 'productos')}${num(f.weight) ? ` · ${lbs(f.weight)}` : ''}`, right: num(f.cost) ? `<b>−${usd(f.cost)}</b>` : '<small class="amber-t">falta el precio</small>' })).join('')}
+          ${c.flightsIn.map((f) => li({ act: 'flight', attrs: `data-id="${f.id}"`, ic: 'pin', color: 'green', title: `Llegó a Cuba el ${esc(tripName(f))}`, sub: n(flightCalc(f).orders.length, 'encargo', 'encargos') })).join('')}
+          ${!c.flights.length ? evRow('plane', 'teal', 'Enviados a Cuba', c.events.shipped) : ''}
           ${evRow('pin', 'green', 'Llegaron a Cuba', c.events.cuba)}
           ${evRow('checkCircle', 'green', 'Entregados', c.events.delivered, usd(st.E.revenue))}
           ${li({ ic: 'send', color: 'teal', title: 'Remesas', sub: `${n(c.remitsIn.length, 'transferencia recibida', 'transferencias recibidas')} · ${n(c.remitsOut.length, 'entregada', 'entregadas')}`, right: c.remitsOut.length ? usd(c.remitsOut.reduce((a, r) => a + num(r.amount), 0)) : '' })}
@@ -137,7 +145,8 @@ export function closurePage(date = today()) {
         <div class="list">
           ${up.toWarehouse.length ? up.toWarehouse.slice(0, 6).map((x) => pendRow(x, 'store', 'Al almacén')).join('') : ''}
           ${up.toCuba.length ? up.toCuba.slice(0, 6).map((x) => pendRow(x, 'plane', 'A Cuba')).join('') : ''}
-          ${up.atWarehouse.length ? li({ ic: 'store', color: 'purple', title: `${up.atWarehouse.length} en el almacén sin enviar`, sub: byMethod(up.atWarehouse) }) : ''}
+          ${up.ready.length ? li({ ic: 'store', color: 'purple', title: `${n(up.ready.length, 'producto', 'productos')} en el almacén para el próximo envío`, sub: readyLine() }) : ''}
+          ${up.trips.map((f) => li({ act: 'flight', attrs: `data-id="${f.id}"`, ic: METHODS[f.method]?.ic || 'plane', color: 'teal', title: `En camino: ${esc(tripName(f))}`, sub: n(flightCalc(f).orders.length, 'encargo', 'encargos') })).join('')}
           ${up.inCuba.length ? li({ ic: 'pin', color: 'green', title: `${up.inCuba.length} en Cuba por entregar`, sub: esc(up.inCuba.map((x) => clientLabel(x.o.client)).join(', ')) }) : ''}
           ${pend.remitsN ? li({ ic: 'send', color: 'teal', title: `${pend.remitsN} remesa${pend.remitsN === 1 ? '' : 's'} por entregar`, right: `<b>${usd(pend.remits)}</b>` }) : ''}
           ${pend.dueN ? li({ ic: 'cash', color: 'amber', title: 'Por cobrar a clientes', sub: `${pend.dueN} encargo${pend.dueN === 1 ? '' : 's'}`, right: `<b>${usd(pend.due)}</b>` }) : ''}
@@ -166,6 +175,7 @@ export function closurePage(date = today()) {
       },
       order: (el) => orderDetail(el.dataset.id),
       remit: (el) => remitDetail(el.dataset.id),
+      flight: (el) => import('./flights.js').then((m) => m.flightDetail(el.dataset.id)),
       share: () => shareText(closureText(closureData(d.date), d.counted, d.note.trim()), 'Cierre del día'),
       save: async (el, ev, pg) => {
         const text = closureText(closureData(d.date), d.counted, d.note.trim());

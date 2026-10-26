@@ -2,7 +2,7 @@
 // Todo el dinero se lleva en USD, en dos cuentas: la tarjeta de EE. UU. y el efectivo en Cuba.
 // GitHub solo aloja el código: los datos viven en cada teléfono (y, si se activa, en la sincronización).
 
-export const APP_VERSION = '1.1.0';
+export const APP_VERSION = '1.2.0';
 const DB_NAME = 'import-business';
 const DB_STORE = 'kv';
 const LS_KEY = 'import-business-state';
@@ -86,30 +86,35 @@ export const EXPENSE_CATS = ['Mensajería', 'Transporte', 'Teléfono e internet'
  * lo que nos cuesta la libra y los días que tarda (claves planas en Ajustes: airPrice, seaCost…).
  */
 export const METHODS = {
-  aereo: { label: 'Aéreo', ic: 'plane', price: 'airPrice', cost: 'airCost', days: 'airDays' },
-  maritimo: { label: 'Marítimo', ic: 'ship', price: 'seaPrice', cost: 'seaCost', days: 'seaDays' },
+  aereo: { label: 'Aéreo', ic: 'plane', price: 'airPrice', cost: 'airCost', days: 'airDays', depart: 'airDepart', trip: 'Vuelo' },
+  maritimo: { label: 'Marítimo', ic: 'ship', price: 'seaPrice', cost: 'seaCost', days: 'seaDays', depart: 'seaDepart', trip: 'Barco' },
 };
+export const WEEKDAY_NAMES = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 export const methodOf = (o) => (METHODS[o?.method] ? o.method : 'aereo');
 export const methodLabel = (m) => METHODS[m]?.label || METHODS.aereo.label;
 /** Tarifas actuales de un método según Ajustes. */
 export function methodRates(m, S = state.settings) {
   const k = METHODS[m] || METHODS.aereo;
-  return { lbPrice: num(S[k.price]), lbCost: num(S[k.cost]), days: num(S[k.days]) };
+  const dep = S[k.depart];
+  return { lbPrice: num(S[k.price]), lbCost: num(S[k.cost]), days: num(S[k.days]), depart: dep === undefined || dep === '' ? -1 : num(dep) };
 }
 export const MOVE_TYPES = { inicial: 'Dinero inicial', aporte: 'Dinero añadido', retiro: 'Dinero retirado', ajuste: 'Ajuste por conteo', traspaso: 'Pasar dinero', cierre: 'Diferencia del cierre' };
 
 /** Colecciones de registros que se sincronizan (cada registro tiene id, y la sincronización añade upd y by). */
-export const COLLECTIONS = ['orders', 'remits', 'expenses', 'workers', 'payroll', 'moves', 'closures'];
+export const COLLECTIONS = ['orders', 'remits', 'expenses', 'workers', 'payroll', 'moves', 'closures', 'flights', 'capital'];
 
 export function defaultSettings() {
   return {
     business: 'Import Business',
-    // Envío aéreo y marítimo: cobro por libra al cliente, lo que nos cuesta la libra y días del almacén a Cuba.
+    // Envío aéreo y marítimo: cobro por libra al cliente, lo que nos cuesta la libra (estimado hasta que se
+    // anota el vuelo con su precio real), día de la semana en que sale (-1 = cualquiera) y días desde la salida hasta Cuba.
     airPrice: 4.5,
     airCost: 2.5,
-    airDays: 7,
+    airDepart: 4, // jueves
+    airDays: 2,
     seaPrice: 2.5,
     seaCost: 1.2,
+    seaDepart: -1,
     seaDays: 30,
     defaultMethod: 'aereo',
     roundLb: false, // cobrar libras completas (redondear hacia arriba)
@@ -146,10 +151,12 @@ export function defaultState() {
     orders: [], // encargos
     remits: [], // remesas: transferencia a la tarjeta → efectivo entregado en Cuba
     expenses: [], // {id, ts, date, cat, amount, account, biz, note}
-    workers: [], // {id, name, phone, role, archived}
+    workers: [], // personas: {id, name, phone, role, kind: 'trabajador'|'inversionista'|'ambos', archived}
     payroll: [], // {id, ts, date, workerId, amount, account, biz, note}
     moves: [], // {id, ts, date, type, account, amount (con signo), to, note}
     closures: [], // {id, ts, date, counted, diff, note, text, summary}
+    flights: [], // vuelos o barcos: {id, n, method, date, weight (lb reales), cost (USD pagados), paidFrom, eta, arrived, note}
+    capital: [], // aportes y devoluciones: {id, ts, date, personId, type: 'aporte'|'devolucion', amount, account, note}
     tombs: [], // registros borrados: {id, col, upd}
     meta: { supd: {} }, // fecha de cambio de cada ajuste compartido
   };
@@ -164,6 +171,8 @@ function migrate(s) {
     old.airCost = old.lbCost ?? d.settings.airCost;
   }
   for (const k of ['lbPrice', 'lbCost', 'cubaDays']) delete old[k];
+  // Versión 1.1: «aéreo, 7 días del almacén a Cuba» → ahora sale los jueves y tarda 2 días desde la salida.
+  if (s.settings && old.airDepart === undefined && (old.airDays === undefined || num(old.airDays) === 7)) old.airDays = 2;
   for (const o of s.orders || []) if (!o.method) o.method = 'aereo';
   for (const k of Object.keys(d)) if (s[k] === undefined) s[k] = d[k];
   s.settings = { ...d.settings, ...s.settings, storeDays: { ...d.settings.storeDays, ...(s.settings?.storeDays || {}) } };
@@ -251,6 +260,7 @@ export const saveLocal = () => idbPut('local', local).catch(() => false);
 
 export function replaceState(next) {
   state = migrate(next);
+  invalidate();
   return save();
 }
 
@@ -286,10 +296,109 @@ export function newOrder(prefill = {}) {
   };
 }
 
+/* ---------- productos de un encargo: peso, llegada al almacén y vuelo ---------- */
+const hasVal = (v) => v !== '' && v !== null && v !== undefined;
+export const hasItemWeights = (o) => o.items.some((it) => hasVal(it.w));
+/** Libras del encargo: la suma de las de cada producto si se anotaron; si no, el peso del encargo. */
+export function orderLbs(o) {
+  return hasItemWeights(o) ? round2(sum(o.items, (it) => it.w)) : round2(num(o.weightLb));
+}
+/** Libras de cada producto (si solo hay peso total, se reparte a partes iguales). */
+export function itemLbs(o) {
+  if (hasItemWeights(o)) return o.items.map((it) => num(it.w));
+  const n = o.items.length || 1;
+  return o.items.map(() => num(o.weightLb) / n);
+}
+/** ¿El encargo lleva la cuenta producto a producto? (los anteriores a la versión 1.2, no) */
+const tracked = (o) => o.items.some((it) => it.arrived || it.flight);
+/** ¿Ese producto ya está en el almacén? */
+export const itemArrived = (o, it) => !!(it.arrived || it.flight) || (!tracked(o) && reached(o, 'almacen'));
+/** Encargo enviado antes de existir los vuelos: su envío se calcula y se paga como antes. */
+export const legacyShipped = (o) => reached(o, 'enviado') && !o.items.some((it) => it.flight);
+
+export const flight = (id) => state.flights.find((f) => f.id === id);
+export const tripName = (f) => `${METHODS[f?.method]?.trip || 'Vuelo'} #${f?.n ?? '?'}`;
+export const nextFlightNumber = () => Math.max(0, ...state.flights.map((f) => num(f.n))) + 1;
+/** Productos que están en el almacén y aún no salieron: [{o, idx, it, lb}] */
+export function readyItems(method = null) {
+  const out = [];
+  for (const o of state.orders) {
+    if (!isOpen(o) || o.status === 'pendiente' || legacyShipped(o) || (method && methodOf(o) !== method)) continue;
+    const w = itemLbs(o);
+    o.items.forEach((it, idx) => {
+      if (!it.flight && itemArrived(o, it)) out.push({ o, idx, it, lb: w[idx] });
+    });
+  }
+  return out;
+}
+
+/** Pone el estado del encargo según sus productos: comprado → en el almacén → enviado → en Cuba. */
+export function syncOrderStatus(o) {
+  if (['pendiente', 'entregado', 'cancelado'].includes(o.status) || !tracked(o)) return;
+  o.dates = o.dates || {};
+  const its = o.items;
+  const fl = its.map((it) => (it.flight ? flight(it.flight) : null));
+  const last = (arr) => arr.filter(Boolean).sort().pop();
+  const whDate = last(its.map((it) => it.arrived)) || last(fl.map((f) => f?.date)) || today();
+  if (fl.every((f) => f && f.arrived)) {
+    Object.assign(o.dates, { warehouse: o.dates.warehouse || whDate, shipped: last(fl.map((f) => f.date)), cuba: last(fl.map((f) => f.arrived)) });
+    o.status = 'cuba';
+  } else if (fl.every(Boolean)) {
+    Object.assign(o.dates, { warehouse: o.dates.warehouse || whDate, shipped: last(fl.map((f) => f.date)) });
+    delete o.dates.cuba;
+    o.status = 'enviado';
+  } else if (its.every((it) => itemArrived(o, it))) {
+    o.dates.warehouse = whDate;
+    delete o.dates.shipped;
+    delete o.dates.cuba;
+    o.status = 'almacen';
+  } else {
+    for (const k of ['warehouse', 'shipped', 'cuba']) delete o.dates[k];
+    o.status = 'comprado';
+  }
+}
+
+/* ---------- reparto del costo real de cada vuelo ---------- */
+let gen = 0;
+let cache = null;
+/** Los datos cambiaron: hay que volver a repartir los costos de los vuelos. */
+export const invalidate = () => {
+  gen++;
+};
+function flightData() {
+  if (cache && cache.gen === gen && cache.state === state) return cache.map;
+  const map = new Map();
+  for (const f of state.flights) map.set(f.id, { f, items: [], lbs: 0 });
+  for (const o of state.orders) {
+    const w = itemLbs(o);
+    o.items.forEach((it, idx) => {
+      const x = it.flight && map.get(it.flight);
+      if (x) {
+        x.items.push({ o, idx, lb: w[idx] });
+        x.lbs += w[idx];
+      }
+    });
+  }
+  for (const x of map.values()) {
+    const c = num(x.f.cost);
+    x.hasCost = c > 0;
+    x.perLb = x.lbs > 0 ? c / x.lbs : 0;
+    x.perItem = x.items.length ? c / x.items.length : 0;
+  }
+  cache = { gen, state, map };
+  return map;
+}
+/** Parte del precio pagado por un vuelo que le toca a un producto, según sus libras (null si aún no se puso el precio). */
+function allocated(o, idx, lb) {
+  const x = flightData().get(o.items[idx].flight);
+  if (!x || !x.hasCost) return null;
+  return x.lbs > 0 ? lb * x.perLb : x.perItem;
+}
+
 /** Todos los importes de un encargo con sus precios guardados (cambiar los ajustes no altera encargos ya hechos). */
 export function orderCalc(o) {
   const products = round2(sum(o.items, (it) => num(it.qty || 1) * num(it.price)));
-  const w = num(o.weightLb);
+  const w = orderLbs(o);
   const lb = o.roundLb ? Math.ceil(w - 1e-9) : w;
   const weight = round2(lb * num(o.lbPrice));
   const fee = o.feeOn ? round2(products * num(o.feePct) / 100) : 0;
@@ -297,18 +406,83 @@ export function orderCalc(o) {
   const subtotal = round2(products + weight + fee + extras);
   const step = num(o.roundTotal);
   const auto = step > 0 ? round2(Math.ceil(round2(subtotal / step) - 1e-9) * step) : subtotal;
-  const total = o.priceOverride !== '' && o.priceOverride !== null && o.priceOverride !== undefined ? round2(num(o.priceOverride)) : auto;
-  const shipCost = o.shipCost !== '' && o.shipCost !== null && o.shipCost !== undefined ? round2(num(o.shipCost)) : round2(lb * num(o.lbCost));
+  const total = hasVal(o.priceOverride) ? round2(num(o.priceOverride)) : auto;
+  // Envío: lo que salió en un vuelo con precio usa su parte del precio real; lo demás, libras × costo estimado.
+  const lbsL = itemLbs(o);
+  const ratio = w > 0 ? lb / w : 1;
+  let shipAlloc = 0;
+  let shipEst = 0;
+  let flown = 0;
+  o.items.forEach((it, i) => {
+    const a = it.flight ? allocated(o, i, lbsL[i]) : null;
+    if (a === null) shipEst += lbsL[i] * ratio * num(o.lbCost);
+    else {
+      shipAlloc += a;
+      flown++;
+    }
+  });
+  const override = hasVal(o.shipCost);
+  const shipCost = override ? round2(num(o.shipCost)) : round2(shipAlloc + shipEst);
+  const shipReal = !override && flown > 0 && flown === o.items.length;
   const cost = round2(products + shipCost);
   const paid = round2(sum(o.payments || [], (p) => p.amount));
   const refund = round2(num(o.refund?.amount));
-  // Lo gastado de verdad hasta ahora: el producto si ya se compró y el envío si ya salió hacia Cuba.
-  const spent = round2((reached(o, 'comprado') ? products : 0) + (reached(o, 'enviado') ? shipCost : 0));
+  // Lo gastado de verdad hasta ahora: el producto si ya se compró y su parte de los vuelos que ya se pagaron.
+  const spent = round2((reached(o, 'comprado') ? products : 0) + (legacyShipped(o) ? shipCost : shipAlloc));
   const profit = o.status === 'cancelado' ? round2(paid + refund - spent) : round2(total - cost);
   return {
-    products, lb: round2(lb), weight, fee, extras, subtotal, auto, total, shipCost, cost, paid, refund, spent, profit,
+    products, lb: round2(lb), weight, fee, extras, subtotal, auto, total, shipCost, shipReal, shipAlloc: round2(shipAlloc), shipEst: round2(shipEst),
+    cost, paid, refund, spent, profit,
     due: o.status === 'cancelado' ? 0 : round2(total - paid),
     units: sum(o.items, (it) => num(it.qty || 1)),
+  };
+}
+
+/** Lo que le toca a cada producto del precio al cliente, del costo y del envío (para la ganancia de cada vuelo). */
+export function itemShares(o) {
+  const k = orderCalc(o);
+  const n = o.items.length || 1;
+  const lbsL = itemLbs(o);
+  const totLb = lbsL.reduce((a, b) => a + b, 0);
+  const prices = o.items.map((it) => num(it.qty || 1) * num(it.price));
+  const prodTot = prices.reduce((a, b) => a + b, 0);
+  const byLb = (i) => (totLb > 0 ? lbsL[i] / totLb : 1 / n);
+  const byPrice = (i) => (prodTot > 0 ? prices[i] / prodTot : 1 / n);
+  const base = o.items.map((_, i) => prices[i] + k.weight * byLb(i) + k.fee * byPrice(i));
+  const rest = k.total - base.reduce((a, b) => a + b, 0);
+  const ratio = orderLbs(o) > 0 ? k.lb / orderLbs(o) : 1;
+  return o.items.map((it, i) => {
+    let ship;
+    if (hasVal(o.shipCost)) ship = num(o.shipCost) * byLb(i);
+    else {
+      const a = it.flight ? allocated(o, i, lbsL[i]) : null;
+      ship = a === null ? lbsL[i] * ratio * num(o.lbCost) : a;
+    }
+    const revenue = base[i] + rest * byPrice(i);
+    return { revenue: round2(revenue), product: round2(prices[i]), ship: round2(ship), weightCharge: round2(k.weight * byLb(i)), profit: round2(revenue - prices[i] - ship) };
+  });
+}
+
+/** Cuentas de un vuelo: qué lleva, lo que se cobra por él, lo que costó y la ganancia de esa vuelta. */
+export function flightCalc(f) {
+  const x = flightData().get(f.id) || { items: [], lbs: 0, hasCost: false };
+  const items = x.items.map(({ o, idx, lb }) => ({ o, idx, it: o.items[idx], lb, ...itemShares(o)[idx], delivered: o.status === 'entregado' }));
+  const orders = [...new Set(items.map((i) => i.o))];
+  const revenue = round2(sum(items, (i) => i.revenue));
+  const products = round2(sum(items, (i) => i.product));
+  const estimated = round2(sum(items, (i) => i.lb * num(i.o.lbCost)));
+  const cost = x.hasCost ? round2(num(f.cost)) : estimated;
+  const done = items.filter((i) => i.delivered);
+  const doneOrders = orders.filter((o) => o.status === 'entregado');
+  return {
+    items, orders, doneOrders,
+    lbs: round2(x.lbs), weight: num(f.weight), extraLb: num(f.weight) ? round2(num(f.weight) - x.lbs) : null,
+    hasCost: x.hasCost, cost, estimated, perLb: x.hasCost && num(f.weight) ? round2(num(f.cost) / num(f.weight)) : null,
+    revenue, products, weightCharge: round2(sum(items, (i) => i.weightCharge)),
+    profit: round2(revenue - products - cost),
+    doneRevenue: round2(sum(done, (i) => i.revenue)),
+    doneProfit: round2(sum(done, (i) => i.profit)),
+    collected: round2(sum(orders, (o) => Math.min(orderCalc(o).paid, orderCalc(o).total))),
   };
 }
 
@@ -384,21 +558,44 @@ export function cubaDays(method = 'aereo', ts = transitStats()) {
   const t = ts.methods[METHODS[method] ? method : 'aereo'].transit;
   return t.n >= MIN_SAMPLES ? Math.round(t.avg) : methodRates(method).days || (method === 'maritimo' ? 30 : 7);
 }
+/** Próximo día de salida de un método a partir de una fecha (los vuelos salen los jueves; -1 = cualquier día). */
+export function nextDeparture(method, from = today()) {
+  const dep = methodRates(method).depart;
+  if (dep < 0 || dep > 6) return from;
+  const d = parseDate(from);
+  return addDays(from, (dep - d.getDay() + 7) % 7);
+}
 /** Fecha prevista de llegada al almacén y a Cuba (la escrita a mano manda sobre la calculada). */
 export function orderEta(o, ts = transitStats()) {
   const d = o.dates || {};
   const base = d.bought || d.created || today();
   const wh = d.warehouse || o.etaWarehouse || addDays(base, storeDays(o.store, ts));
   const whAuto = !d.warehouse && !o.etaWarehouse;
-  // A Cuba: desde el envío; si todavía no salió del almacén, una estimación que se mueve cada día.
+  const m = methodOf(o);
+  const days = cubaDays(m, ts);
+  // A Cuba: lo que ya salió, con su vuelo; lo que no, en el próximo día de salida después de llegar al almacén.
   let cuba = d.cuba || o.etaCuba;
   let cubaAuto = false;
+  let departure = null;
   if (!cuba) {
-    cubaAuto = true;
-    const from = d.shipped || (d.warehouse ? (today() > d.warehouse ? today() : d.warehouse) : wh > today() ? wh : today());
-    cuba = addDays(from, cubaDays(methodOf(o), ts));
+    const dates = [];
+    const flights = [...new Set(o.items.map((it) => it.flight).filter(Boolean))].map(flight).filter(Boolean);
+    for (const f of flights) {
+      dates.push(f.arrived || f.eta || addDays(f.date, days));
+      if (!f.arrived && !f.eta) cubaAuto = true;
+    }
+    if (!flights.length || o.items.some((it) => !it.flight)) {
+      cubaAuto = true;
+      if (legacyShipped(o)) dates.push(addDays(d.shipped, days));
+      else {
+        const ready = d.warehouse || wh;
+        departure = nextDeparture(m, ready > today() ? ready : today());
+        dates.push(addDays(departure, days));
+      }
+    }
+    cuba = dates.sort().pop();
   }
-  return { warehouse: wh, cuba, whAuto, cubaAuto };
+  return { warehouse: wh, cuba, whAuto, cubaAuto, departure };
 }
 
 /** Lo que viene: llegadas al almacén y a Cuba, para avisar y para el cierre. */
@@ -426,6 +623,8 @@ export function upcoming(ref = today()) {
     warehouseSoon: toWarehouse.filter(soon),
     cubaSoon: toCuba.filter(soon),
     atWarehouse: state.orders.filter((o) => o.status === 'almacen'),
+    ready: readyItems(),
+    trips: state.flights.filter((f) => !f.arrived),
   };
 }
 
@@ -442,6 +641,13 @@ export function reminders() {
     const who = clientLabel(o.client);
     out.push({ key: `${o.id}:${o.status}:${date}:pre`, date: addDays(date, -warn), title: `Pronto llega ${where}`, body: `${orderTitle(o)} · ${who} · previsto el ${fmtDate(date)}`, tag: o.id });
     out.push({ key: `${o.id}:${o.status}:${date}:day`, date, title: `Hoy debería llegar ${where}`, body: `${orderTitle(o)} · ${who}`, tag: o.id });
+  }
+  // El día que sale el vuelo, si hay productos esperando en el almacén.
+  for (const m of Object.keys(METHODS)) {
+    const ready = readyItems(m);
+    if (!ready.length || methodRates(m).depart < 0) continue;
+    const date = nextDeparture(m);
+    out.push({ key: `salida:${m}:${date}`, date, title: `Hoy sale el ${METHODS[m].trip.toLowerCase()}`, body: `${ready.length} producto${ready.length === 1 ? '' : 's'} en el almacén para enviar (${methodLabel(m).toLowerCase()})`, tag: `salida-${m}` });
   }
   return out;
 }
@@ -503,7 +709,25 @@ export const pendingRemits = () => activeRemits().filter((r) => !r.deliveredAt);
 
 /* ======================= trabajadores ======================= */
 export const worker = (id) => state.workers.find((w) => w.id === id);
-export const workerName = (id) => worker(id)?.name || 'Trabajador';
+export const workerName = (id) => worker(id)?.name || 'Persona';
+export const PERSON_KINDS = { trabajador: 'Trabajador', inversionista: 'Inversionista', ambos: 'Trabajador e inversionista' };
+export const personKind = (w) => (PERSON_KINDS[w?.kind] ? w.kind : 'trabajador');
+export const isWorker = (w) => personKind(w) !== 'inversionista';
+
+/* ======================= aportes de socios e inversionistas ======================= */
+export const CAPITAL_TYPES = { aporte: 'Aporte', devolucion: 'Devolución' };
+/** Lo que una persona puso en el negocio, lo que se le devolvió y lo que falta por devolver. */
+export function personCapital(id) {
+  const list = state.capital.filter((c) => c.personId === id);
+  const put = round2(sum(list.filter((c) => c.type === 'aporte'), (c) => c.amount));
+  const back = round2(sum(list.filter((c) => c.type === 'devolucion'), (c) => c.amount));
+  return { put, back, owed: round2(put - back), list };
+}
+export function capitalTotals() {
+  const put = round2(sum(state.capital.filter((c) => c.type === 'aporte'), (c) => c.amount));
+  const back = round2(sum(state.capital.filter((c) => c.type === 'devolucion'), (c) => c.amount));
+  return { put, back, owed: round2(put - back) };
+}
 
 /* ======================= dinero: tarjeta y efectivo ======================= */
 /**
@@ -519,7 +743,8 @@ export function moneyEntries(account, { from = null, to = null, skipClosureOf = 
     const who = clientLabel(o.client);
     const d = o.dates || {};
     if (o.payFrom === account && reached(o, 'comprado') && inR(d.bought)) push({ date: d.bought, ts: o.ts, amount: -k.products, label: `Compra en ${o.store}`, note: `${orderTitle(o)} · ${who}`, kind: 'order', id: o.id, biz: 'encargos' });
-    if (o.shipFrom === account && reached(o, 'enviado') && inR(d.shipped)) push({ date: d.shipped, ts: o.ts + 1, amount: -k.shipCost, label: 'Envío a Cuba', note: `${lbs(k.lb)} · ${who}`, kind: 'order', id: o.id, biz: 'encargos' });
+    // Encargos enviados antes de los vuelos: su envío estimado se pagó al enviarlos. Ahora el envío lo paga cada vuelo.
+    if (o.shipFrom === account && legacyShipped(o) && inR(d.shipped)) push({ date: d.shipped, ts: o.ts + 1, amount: -k.shipCost, label: 'Envío a Cuba', note: `${lbs(k.lb)} · ${who}`, kind: 'order', id: o.id, biz: 'encargos' });
     for (const p of o.payments || []) if (p.account === account && inR(p.date)) push({ date: p.date, ts: p.ts || o.ts, amount: num(p.amount), label: 'Cobro de encargo', note: `${who} · ${orderTitle(o)}`, kind: 'order', id: o.id, biz: 'encargos', income: true });
     if (o.refund && account === (o.refund.account || 'tarjeta') && inR(o.refund.date)) push({ date: o.refund.date, ts: o.ts + 2, amount: num(o.refund.amount), label: 'Devolución de la tienda', note: orderTitle(o), kind: 'order', id: o.id, biz: 'encargos', income: true });
   }
@@ -531,6 +756,16 @@ export function moneyEntries(account, { from = null, to = null, skipClosureOf = 
       push({ date: r.deliveredAt, ts: r.ts + 1, amount: -k.amount, label: 'Remesa entregada', note: `${r.recipient}${r.address ? ' · ' + r.address : ''}`, kind: 'remit', id: r.id, biz: 'remesas' });
       push({ date: r.deliveredAt, ts: r.ts + 2, amount: -k.cost, label: 'Costo de la entrega', note: r.recipient, kind: 'remit', id: r.id, biz: 'remesas' });
     }
+  }
+  for (const f of state.flights) {
+    if ((f.paidFrom || 'tarjeta') !== account || !inR(f.date) || !(num(f.cost) > 0)) continue;
+    const c = flightCalc(f);
+    push({ date: f.date, ts: f.ts || 0, amount: -num(f.cost), label: `${tripName(f)} · envío ${methodLabel(f.method).toLowerCase()}`, note: `${c.items.length} producto${c.items.length === 1 ? '' : 's'}${num(f.weight) ? ` · ${lbs(f.weight)}` : ''}`, kind: 'flight', id: f.id, biz: 'encargos' });
+  }
+  for (const c of state.capital) {
+    if (c.account !== account || !inR(c.date)) continue;
+    const name = workerName(c.personId);
+    push({ date: c.date, ts: c.ts, amount: c.type === 'devolucion' ? -num(c.amount) : num(c.amount), label: c.type === 'devolucion' ? `Devuelto a ${name}` : `Aporte de ${name}`, note: c.note, kind: 'capital', id: c.id });
   }
   for (const e of state.expenses) if (e.account === account && inR(e.date)) push({ date: e.date, ts: e.ts, amount: -num(e.amount), label: `Gasto · ${e.cat}`, note: e.note, kind: 'expense', id: e.id, biz: e.biz });
   for (const p of state.payroll) if (p.account === account && inR(p.date)) push({ date: p.date, ts: p.ts, amount: -num(p.amount), label: `Pago a ${workerName(p.workerId)}`, note: p.note, kind: 'payroll', id: p.id, biz: p.biz });
@@ -558,7 +793,7 @@ export function pending() {
       due += k.due;
       dueN++;
     }
-    if (!reached(o, 'enviado')) ship += k.shipCost;
+    if (!legacyShipped(o)) ship += k.shipEst; // lo que aún no salió en un vuelo con precio
   }
   const pr = pendingRemits();
   return {
@@ -665,7 +900,7 @@ export function stats(from, to) {
   const out = { tarjeta: 0, efectivo: 0 };
   for (const acc of ['tarjeta', 'efectivo']) {
     for (const e of moneyEntries(acc, { from, to })) {
-      if (e.kind === 'move') continue;
+      if (isTransfer(e)) continue;
       if (e.amount > 0) income[acc] += e.amount;
       else out[acc] -= e.amount;
     }
@@ -673,7 +908,9 @@ export function stats(from, to) {
     out[acc] = round2(out[acc]);
   }
   const bought = state.orders.filter((o) => reached(o, 'comprado') && inR(o.dates.bought));
+  const flights = state.flights.filter((f) => inR(f.date)).sort((a, b) => b.date.localeCompare(a.date) || num(b.n) - num(a.n));
   return {
+    flights,
     E, R, ex, pay, shared, netE, netR,
     net: round2(netE + netR),
     expenses: round2(sum(expenses, (e) => e.amount)),
@@ -686,6 +923,9 @@ export function stats(from, to) {
     newRemits: state.remits.filter((r) => !r.cancelled && inR(r.date)),
   };
 }
+
+/** Movimientos que no son ingresos ni gastos del negocio: pasar dinero, ajustes, aportes y devoluciones. */
+export const isTransfer = (e) => e.kind === 'move' || e.kind === 'capital';
 
 /** Barras del gráfico: [{label, from, to, e, r}] con la ganancia de cada negocio. */
 export function buckets(kind, from, to) {
@@ -714,19 +954,22 @@ export function closureData(date) {
   const cashDay = day('efectivo');
   const cardDay = day('tarjeta');
   const opening = balance('efectivo', addDays(date, -1));
-  const moves = round2(sum(cashDay.filter((e) => e.kind === 'move'), (e) => e.amount));
-  const cashIn = round2(sum(cashDay.filter((e) => e.kind !== 'move' && e.amount > 0), (e) => e.amount));
-  const cashOut = round2(sum(cashDay.filter((e) => e.kind !== 'move' && e.amount < 0), (e) => -e.amount));
+  const moves = round2(sum(cashDay.filter(isTransfer), (e) => e.amount));
+  const cashIn = round2(sum(cashDay.filter((e) => !isTransfer(e) && e.amount > 0), (e) => e.amount));
+  const cashOut = round2(sum(cashDay.filter((e) => !isTransfer(e) && e.amount < 0), (e) => -e.amount));
   const ev = (key) => state.orders.filter((o) => o.dates?.[key] === date);
   return {
     date, st, opening, moves, cashIn, cashOut,
     expected: round2(opening + cashIn - cashOut + moves),
     cardOpening: balance('tarjeta', addDays(date, -1)),
-    cardIn: round2(sum(cardDay.filter((e) => e.amount > 0 && e.kind !== 'move'), (e) => e.amount)),
-    cardOut: round2(sum(cardDay.filter((e) => e.amount < 0 && e.kind !== 'move'), (e) => -e.amount)),
+    cardIn: round2(sum(cardDay.filter((e) => e.amount > 0 && !isTransfer(e)), (e) => e.amount)),
+    cardOut: round2(sum(cardDay.filter((e) => e.amount < 0 && !isTransfer(e)), (e) => -e.amount)),
     card: balance('tarjeta', date),
     collected: round2(sum(state.orders.flatMap((o) => o.payments || []).filter((p) => p.date === date), (p) => p.amount)),
     events: { bought: ev('bought'), warehouse: ev('warehouse'), shipped: ev('shipped'), cuba: ev('cuba'), delivered: ev('delivered') },
+    flights: state.flights.filter((f) => f.date === date),
+    flightsIn: state.flights.filter((f) => f.arrived === date),
+    capital: state.capital.filter((c) => c.date === date),
     remitsIn: state.remits.filter((r) => !r.cancelled && r.receivedAt === date),
     remitsOut: state.remits.filter((r) => !r.cancelled && r.deliveredAt === date),
     up: upcoming(date),
@@ -744,6 +987,8 @@ export function closureOutdated(date) {
     || state.remits.some((r) => changed(r) && (r.receivedAt === date || r.deliveredAt === date))
     || state.expenses.some((x) => x.date === date && changed(x))
     || state.payroll.some((x) => x.date === date && changed(x))
+    || state.flights.some((x) => (x.date === date || x.arrived === date) && changed(x))
+    || state.capital.some((x) => x.date === date && changed(x))
     || state.moves.some((x) => x.date === date && changed(x) && x.type !== 'cierre');
 }
 

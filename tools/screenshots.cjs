@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 
 const URL = process.env.APP_URL || 'http://localhost:8080/';
-const NOW = process.env.FAKE_NOW || '2026-10-28T18:30:00';
+const NOW = process.env.FAKE_NOW || '2026-10-29T18:30:00'; // jueves: día de salida del vuelo
 const UIS = process.env.UI ? [process.env.UI] : ['android', 'ios'];
 
 /** Datos de ejemplo: unas semanas de encargos, remesas, gastos y pagos. */
@@ -27,7 +27,7 @@ async function seed(page) {
       const r = S.newOrder({
         id: S.uid(), ts: tsOf(D(o.created ?? o.bought ?? 0), 10),
         client: { name: o.name, phone: o.phone || '' },
-        items: o.items.map(([desc, price, qty = 1, url = '']) => ({ desc, price, qty, url })),
+        items: o.items.map(([desc, price, qty = 1, w = '']) => ({ desc, price, qty, url: '', w })),
         store: o.store, storeOrder: o.storeOrder || '', tracking: o.tracking || '', carrier: S.guessCarrier(o.tracking || ''),
         method: o.method || 'aereo', ...S.withMethod(o.method || 'aereo'),
         status: o.status, weightLb: o.w ?? '', weightReal: o.real ?? o.w !== undefined, feeOn: !!o.fee, feePct: 10,
@@ -35,6 +35,10 @@ async function seed(page) {
         dates: { created: D(o.created ?? o.bought ?? 0) },
       });
       for (const [k, key] of [['bought', 'bought'], ['wh', 'warehouse'], ['shipped', 'shipped'], ['cuba', 'cuba'], ['delivered', 'delivered'], ['cancelled', 'cancelled']]) if (o[k] !== undefined) r.dates[key] = D(o[k]);
+      // Productos que ya llegaron al almacén (todos, o los indicados con su día).
+      if (o.wh !== undefined) for (const it of r.items) it.arrived = D(o.wh);
+      for (const [i, dd] of o.arrived || []) r.items[i].arrived = D(dd);
+      if (S.hasItemWeights(r)) r.weightLb = S.orderLbs(r);
       r.payments = (o.pay || []).map(([d, amount, account = 'efectivo']) => ({ id: S.uid(), ts: tsOf(D(d), 15), date: D(d), amount, account }));
       if (o.refund) r.refund = { amount: o.refund, date: D(o.cancelled), account: 'tarjeta' };
       // Entregados: el resto se cobra al entregar.
@@ -45,32 +49,57 @@ async function seed(page) {
       st.orders.push(r);
       return r;
     };
-    // Entregados
-    ord({ name: 'Yanelis Pérez', phone: '5 2345678', items: [['Zapatillas Nike Air Max talla 9', 89.99]], store: 'Amazon', bought: -44, wh: -40, shipped: -37, cuba: -30, delivered: -29, status: 'entregado', w: 3.1, pay: [[-44, 40]] });
+    // Entregados (los vuelos salen los jueves: hoy es jueves)
+    ord({ name: 'Yanelis Pérez', phone: '5 2345678', items: [['Zapatillas Nike Air Max talla 9', 89.99]], store: 'Amazon', bought: -44, wh: -40, shipped: -35, cuba: -33, delivered: -32, status: 'entregado', w: 3.1, pay: [[-44, 40]] });
     ord({ name: 'Osmany Rodríguez', phone: '5 3456789', items: [['Freidora de aire Ninja 4 qt', 79.99]], store: 'Amazon', method: 'maritimo', bought: -66, wh: -62, shipped: -60, cuba: -30, delivered: -28, fee: true, status: 'entregado', w: 11.2 });
-    ord({ name: 'Dayana Fernández', phone: '5 4567890', items: [['Vestidos de verano', 12.5, 3], ['Sandalias', 9.9]], store: 'SHEIN', bought: -40, wh: -31, shipped: -30, cuba: -23, delivered: -22, status: 'entregado', w: 2.4, fee: true });
-    ord({ name: 'Rolando García', phone: '5 5678901', items: [['Samsung Galaxy A15 128 GB', 139]], store: 'Walmart', bought: -35, wh: -30, shipped: -30, cuba: -24, delivered: -21, fee: true, status: 'entregado', w: 1.2, extras: [{ label: 'Protector y forro', amount: 8 }] });
+    ord({ name: 'Dayana Fernández', phone: '5 4567890', items: [['Vestidos de verano', 12.5, 3, 1.5], ['Sandalias', 9.9, 1, 0.9]], store: 'SHEIN', bought: -40, wh: -31, shipped: -28, cuba: -26, delivered: -25, status: 'entregado', fee: true });
+    ord({ name: 'Rolando García', phone: '5 5678901', items: [['Samsung Galaxy A15 128 GB', 139]], store: 'Walmart', bought: -35, wh: -30, shipped: -28, cuba: -26, delivered: -24, fee: true, status: 'entregado', w: 1.2, extras: [{ label: 'Protector y forro', amount: 8 }] });
     ord({ name: 'Yamilé Castro', phone: '5 6789012', items: [['Leche en polvo Nido 2 kg', 24.5, 2]], store: 'Amazon', method: 'maritimo', bought: -55, wh: -51, shipped: -48, cuba: -18, delivered: -17, status: 'entregado', w: 9.6 });
-    ord({ name: 'Lisandra Hernández', phone: '5 7890123', items: [['Ropa de niño talla 4T', 6.5, 6]], store: 'SHEIN', bought: -28, wh: -19, shipped: -10, cuba: -3, delivered: -2, status: 'entregado', w: 2.8 });
-    ord({ name: 'Yanelis Pérez', phone: '5 2345678', items: [['Perfume Carolina Herrera 212', 72]], store: 'Amazon', bought: -24, wh: -20, shipped: -11, cuba: -3, delivered: 0, fee: true, status: 'entregado', w: 1.5, pay: [[-24, 30]] });
+    ord({ name: 'Lisandra Hernández', phone: '5 7890123', items: [['Ropa de niño talla 4T', 6.5, 6]], store: 'SHEIN', bought: -28, wh: -19, shipped: -14, cuba: -12, delivered: -11, status: 'entregado', w: 2.8 });
+    ord({ name: 'Yanelis Pérez', phone: '5 2345678', items: [['Perfume Carolina Herrera 212', 72]], store: 'Amazon', bought: -24, wh: -20, shipped: -14, cuba: -12, delivered: 0, fee: true, status: 'entregado', w: 1.5, pay: [[-24, 30]] });
     ord({ name: 'Alexei Martínez', phone: '5 8901234', items: [['Olla arrocera Aroma 8 tazas', 29.99]], store: 'Walmart', method: 'maritimo', bought: -50, wh: -45, shipped: -33, cuba: -3, delivered: -1, status: 'entregado', w: 6.4, owe: true, pay: [[-1, 30]] });
     // En Cuba para entregar
-    ord({ name: 'Mabel Suárez', phone: '5 9012345', items: [['Juego de sábanas queen', 34.99], ['Toallas (paquete de 6)', 22]], store: 'Amazon', bought: -22, wh: -18, shipped: -8, cuba: -1, status: 'cuba', w: 7.3, pay: [[-22, 50]] });
-    ord({ name: 'Yoandry López', phone: '5 0123456', items: [['Ventilador recargable 16"', 45.99]], store: 'Amazon', method: 'maritimo', bought: -45, wh: -41, shipped: -33, cuba: -1, status: 'cuba', w: 8.9 });
-    // Enviados a Cuba
-    ord({ name: 'Dania Ramírez', phone: '5 1122334', items: [['Mochila escolar', 24.99], ['Útiles escolares', 18.5]], store: 'Amazon', bought: -16, wh: -12, shipped: -5, status: 'enviado', w: 4.2, tracking: 'TBA318472059341' });
+    ord({ name: 'Mabel Suárez', phone: '5 9012345', items: [['Juego de sábanas queen', 34.99, 1, 4.5], ['Toallas (paquete de 6)', 22, 1, 2.8]], store: 'Amazon', bought: -14, wh: -10, shipped: -7, cuba: -5, status: 'cuba', pay: [[-14, 50]] });
+    ord({ name: 'Dania Ramírez', phone: '5 1122334', items: [['Mochila escolar', 24.99, 1, 2.7], ['Útiles escolares', 18.5, 1, 1.5]], store: 'Amazon', bought: -16, wh: -12, shipped: -7, cuba: -5, status: 'cuba', tracking: 'TBA318472059341' });
+    ord({ name: 'Yoandry López', phone: '5 0123456', items: [['Ventilador recargable 16"', 45.99]], store: 'Amazon', method: 'maritimo', bought: -45, wh: -41, shipped: -33, cuba: -3, status: 'cuba', w: 8.9 });
+    // En camino a Cuba (barco)
     ord({ name: 'Osmany Rodríguez', phone: '5 3456789', items: [['Batería portátil EcoFlow River 2', 189]], store: 'Amazon', method: 'maritimo', bought: -26, wh: -22, shipped: -20, fee: true, status: 'enviado', w: 17.6, pay: [[-12, 100]], tracking: '1Z999AA10123456784' });
-    // En el almacén
-    ord({ name: 'Rolando García', phone: '5 5678901', items: [['Tablet Amazon Fire HD 10', 109.99]], store: 'Amazon', bought: -7, wh: -3, fee: true, status: 'almacen', w: 2.1 });
-    ord({ name: 'Yamilé Castro', phone: '5 6789012', items: [['Vitaminas Centrum mujer', 18.99, 2]], store: 'Walmart', method: 'maritimo', bought: -6, wh: -1, status: 'almacen', w: 1.3, real: true });
-    // Hacia el almacén
-    ord({ name: 'Lisandra Hernández', phone: '5 7890123', items: [['Conjuntos deportivos', 14.9, 2], ['Tenis de niña', 16.5]], store: 'SHEIN', bought: -5, status: 'comprado', w: 2.5, real: false, etaWh: 4, tracking: 'YT2412345678901234', storeOrder: 'GSUN8K4L00XYZ' });
+    // En el almacén, esperando el vuelo de hoy
+    ord({ name: 'Rolando García', phone: '5 5678901', items: [['Tablet Amazon Fire HD 10', 109.99, 1, 2.1]], store: 'Amazon', bought: -7, wh: -3, fee: true, status: 'almacen' });
+    ord({ name: 'Yusimí Ortega', phone: '5 2581470', items: [['Crema La Roche-Posay', 21.99, 1, 0.6], ['Protector solar Neutrogena', 12.49, 2, 0.8]], store: 'Amazon', bought: -6, wh: -2, status: 'almacen' });
+    ord({ name: 'Yamilé Castro', phone: '5 6789012', items: [['Vitaminas Centrum mujer', 18.99, 2, 1.3]], store: 'Walmart', method: 'maritimo', bought: -6, wh: -1, status: 'almacen' });
+    // Hacia el almacén (uno ya llegó en parte)
+    ord({ name: 'Lisandra Hernández', phone: '5 7890123', items: [['Conjuntos deportivos', 14.9, 2, 1.4], ['Tenis de niña', 16.5, 1, 1.1]], store: 'SHEIN', bought: -5, status: 'comprado', real: false, etaWh: 1, arrived: [[0, -1]], tracking: 'YT2412345678901234', storeOrder: 'GSUN8K4L00XYZ' });
     ord({ name: 'Mabel Suárez', phone: '5 9012345', items: [['Cafetera Oster 12 tazas', 39.99]], store: 'Amazon', bought: -3, status: 'comprado', w: 5, real: false, etaWh: 1, tracking: '9400111899223197428490', storeOrder: '112-4829137-5501827' });
     ord({ name: 'Alexei Martínez', phone: '5 8901234', items: [['Audífonos inalámbricos', 11.99, 2]], store: 'Temu', bought: -12, status: 'comprado', w: 0.8, real: false });
     // Por comprar
     ord({ name: 'Dayana Fernández', phone: '5 4567890', items: [['Secador de pelo Revlon', 34.99]], store: 'Amazon', created: 0, status: 'pendiente', w: 2, real: false, note: 'Lo quiere en color negro' });
     // Cancelado
     ord({ name: 'Yoandry López', phone: '5 0123456', items: [['Reloj Casio', 25]], store: 'Amazon', bought: -20, cancelled: -18, status: 'cancelado', w: 0.5, refund: 25 });
+
+    // Vuelos y barcos: lo enviado el mismo día por el mismo método. El peso real lleva un 12% más (cajas).
+    const groups = new Map();
+    for (const r of st.orders) {
+      if (!r.dates.shipped || r.status === 'cancelado') continue;
+      const k = `${r.method}|${r.dates.shipped}`;
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(r);
+    }
+    let fn = 0;
+    for (const [k, list] of [...groups.entries()].sort((a, b) => a[0].split('|')[1].localeCompare(b[0].split('|')[1]))) {
+      const [method, date] = k.split('|');
+      const lbsTot = list.reduce((a, o) => a + S.orderLbs(o), 0);
+      const weight = Math.round(lbsTot * 1.12 * 10) / 10;
+      const cubas = list.map((o) => o.dates.cuba).filter(Boolean);
+      const f = { id: S.uid(), ts: tsOf(date, 17), n: ++fn, method, date, weight, cost: Math.round(weight * (method === 'aereo' ? 2.3 : 1.05) * 100) / 100, paidFrom: 'tarjeta', eta: '', arrived: cubas.length === list.length ? cubas.sort().pop() : null, note: method === 'aereo' ? 'Cajas de la agencia' : '' };
+      st.flights.push(f);
+      for (const o of list) for (const it of o.items) {
+        it.flight = f.id;
+        it.arrived = it.arrived || o.dates.warehouse || date;
+      }
+    }
+    S.invalidate();
+    for (const o of st.orders) S.syncOrderStatus(o);
 
     // Remesas
     const recips = [
@@ -113,7 +142,13 @@ async function seed(page) {
     // Trabajadores
     const w1 = { id: S.uid(), ts: tsOf(D(-45), 9), name: 'Yuniel', role: 'Mensajero, entrega remesas', phone: '5 9988776', archived: false };
     const w2 = { id: S.uid(), ts: tsOf(D(-45), 9), name: 'Claudia', role: 'Ayudante de encargos', phone: '5 8877665', archived: false };
-    st.workers.push(w1, w2);
+    w1.kind = 'trabajador';
+    w2.kind = 'ambos';
+    const w3 = { id: S.uid(), ts: tsOf(D(-45), 9), name: 'Tío Raúl', role: 'Pone dinero para las compras', phone: '+1 305 555 0142', kind: 'inversionista', archived: false };
+    st.workers.push(w1, w2, w3);
+    st.capital.push({ id: S.uid(), ts: tsOf(D(-45), 10), date: D(-45), personId: w3.id, type: 'aporte', amount: 2000, account: 'tarjeta', note: 'Para comprar mercancía' });
+    st.capital.push({ id: S.uid(), ts: tsOf(D(-30), 10), date: D(-30), personId: w2.id, type: 'aporte', amount: 300, account: 'efectivo', note: '' });
+    st.capital.push({ id: S.uid(), ts: tsOf(D(-10), 10), date: D(-10), personId: w3.id, type: 'devolucion', amount: 500, account: 'efectivo', note: 'Primera parte' });
     for (const d of [-35, -28, -21, -14, -7]) st.payroll.push({ id: S.uid(), ts: tsOf(D(d), 19), date: D(d), workerId: w1.id, amount: 15, account: 'efectivo', biz: 'remesas', note: 'Semana de entregas' });
     for (const d of [-30, -16, -2]) st.payroll.push({ id: S.uid(), ts: tsOf(D(d), 19), date: D(d), workerId: w2.id, amount: 25, account: 'efectivo', biz: 'encargos', note: 'Quincena' });
     // Cierres de días anteriores
@@ -208,7 +243,7 @@ async function seed(page) {
         await page.evaluate(() => window.scrollTo(0, 0));
       };
       const scrollPage = (y) => page.evaluate((yy) => { const b = [...document.querySelectorAll('.page-wrap.open .page-body')].pop(); b.scrollTop = yy; }, y);
-      const scrollTo = (sel) => page.evaluate((s) => { const b = [...document.querySelectorAll('.page-wrap.open .page-body')].pop(); const el = b.querySelector(s); b.scrollTop = el.offsetTop - 70; }, sel);
+      const scrollTo = (sel) => page.evaluate((s) => { const b = [...document.querySelectorAll('.page-wrap.open .page-body')].pop(); const el = b.querySelector(s); b.scrollTop += el.getBoundingClientRect().top - b.getBoundingClientRect().top - 70; }, sel);
       const orderId = (name, status) => page.evaluate(async ([n, s]) => (await import('/js/store.js')).state.orders.find((o) => o.client.name === n && (!s || o.status === s)).id, [name, status]);
       const q = `?ui=${UI}`;
 
@@ -275,10 +310,16 @@ async function seed(page) {
       await scrollPage(560);
       await shot('15-encargo-ficha-abajo');
       await scrollPage(0);
-      // Llegó al almacén: peso real
+      // Productos de un encargo: lista de lo que llegó al almacén
+      await back();
+      await page.click(`#order-list [data-act="order"][data-id="${await orderId('Lisandra Hernández', 'comprado')}"]`);
+      await page.waitForTimeout(500);
+      await scrollTo('.item-li');
+      await shot('15b-productos-llegados');
+      await scrollPage(0);
+      // Llegó al almacén: marcar lo que llegó
       await top('[data-act="advance"]').click();
       await page.waitForTimeout(500);
-      await top('[data-bind="weight"]').fill('4.6');
       await shot('16-llego-almacen');
       await back();
       await back();
@@ -297,6 +338,20 @@ async function seed(page) {
       await page.click('[data-act="bulkShip"]');
       await page.waitForTimeout(500);
       await shot('19-enviar-a-cuba');
+      await top('[data-bind="weight"]').fill('6.5');
+      await top('[data-bind="cost"]').fill('15.60');
+      await scrollTo('[data-bind="weight"]');
+      await page.waitForTimeout(250);
+      await shot('19b-vuelo-peso-precio');
+      await top('[data-act="save"]').click();
+      await page.waitForTimeout(700);
+      await shot('22-vuelo', false);
+      await scrollPage(520);
+      await shot('22b-vuelo-abajo');
+      await back();
+      await page.click('.topbar [data-act="flights"]');
+      await page.waitForTimeout(500);
+      await shot('23-vuelos');
       await back();
       await page.click('[data-act="chip"][data-name="orderFilter"][data-v="activos"]');
       // Clientes
@@ -357,6 +412,22 @@ async function seed(page) {
       await top('[data-act="seg"][data-name="biz"][data-v="remesas"]').click();
       await top('[data-bind="note"]').fill('Semana de entregas');
       await shot('44-pago-trabajador');
+      await back();
+      await page.click('[data-act="seg"][data-name="dineroMode"][data-v="aportes"]');
+      await page.waitForTimeout(300);
+      await shot('45-aportes');
+      await page.click('[data-act="workers"]');
+      await page.waitForTimeout(500);
+      await shot('46-personas');
+      await page.locator('.page-wrap.open').last().locator('[data-act="worker"]').filter({ hasText: 'Tío Raúl' }).click();
+      await page.waitForTimeout(500);
+      await shot('47-inversionista');
+      await top('[data-act="back"]').click();
+      await page.waitForTimeout(500);
+      await top('[data-bind="amount"]').fill('500');
+      await shot('48-devolucion');
+      await back();
+      await back();
       await back();
 
       // 5. Informes

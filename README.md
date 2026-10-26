@@ -20,6 +20,9 @@ Web app para el negocio de **encargos de compras por internet con envío a Cuba*
 - **Encargos**: cliente (nombre y teléfono), productos con el precio pagado, tienda (Amazon, SHEIN, Temu…), nº de pedido y de seguimiento, peso y estado: *por comprar → comprado → en el almacén → enviado a Cuba → en Cuba → entregado* (o cancelado, con devolución). Línea de tiempo con las fechas y los **días de cada tramo** (compra → almacén → Cuba).
 - **Dos métodos de envío, aéreo y marítimo**, que el cliente escoge en cada encargo. Cada uno tiene su cobro por libra al cliente, lo que nos cuesta la libra y sus días del almacén a Cuba (≈ 1 semana y ≈ 1 mes por defecto), ajustables por separado.
 - **Precio**: productos + libras × cobro por libra del método + **% del producto (apagado por defecto)** + otros cargos o descuentos; precio acordado opcional, libras completas y redondeo. Ganancia = precio − productos − libras × costo de la libra del método. Cada encargo guarda sus precios.
+- **Productos uno a uno**: cada producto de un encargo puede llevar su propio peso y su casilla de «llegó al almacén»; el peso puede ponerse después. Cuando llegan todos, el encargo pasa a «En el almacén».
+- **Vuelos de los jueves** (y barcos): lo que está en el almacén sale el próximo día de salida (jueves para el aéreo, ajustable), así que la llegada prevista a Cuba es ese día + los días del vuelo. Al anotar el vuelo se marcan los productos que van, su **peso real total** (con cajas) y **lo que se pagó por todo**: solo ese precio sale de la cuenta y se reparte entre los productos por libras. Cada vuelo muestra su **ganancia prevista** y la **ya hecha**, que sube a medida que se entregan sus encargos.
+- **Aportes de socios e inversionistas**: lo que cada persona ha puesto en el negocio, lo que se le ha devuelto y lo que falta por devolverle (no cuenta como ganancia ni como gasto).
 - **Llegadas y avisos**: fecha prevista al almacén (escrita, **pegada del texto de la tienda** o calculada con lo que tarda cada tienda, aprendido con los encargos reales) y a Cuba (según el método, aprendido con los envíos reales de cada uno). Inicio muestra lo que llega pronto y lo atrasado; avisos del teléfono (opcionales) y **recordatorio en el calendario**. Botones para **rastrear** el paquete (UPS, USPS, FedEx, DHL, Amazon o 17TRACK) y abrir el pedido en la tienda.
 - **Cobros**: adelantos y pagos en efectivo o tarjeta, lo que debe cada cliente, cobro al entregar. Enviar varios encargos del almacén a Cuba de una vez, por método. Lista de **clientes** con su historial.
 - **Remesas**: transferencia a la tarjeta con un % por encima → efectivo entregado en Cuba. Pendientes con **nombre, dirección y teléfono** (llamar, WhatsApp, mapa), cálculo en los dos sentidos, costo de la entrega, aviso si el efectivo no alcanza y lista para compartir con el mensajero. Se registra como cambio de efectivo a tarjeta.
@@ -62,9 +65,10 @@ js/sync.js              Sincronización: cambios, fusión, copias automáticas, 
 js/ui.js                Componentes que se adaptan a iOS/Android: pantallas, hojas, diálogos, gestos
 js/core.js              Guardado, refresco y compartir
 js/app.js               Pestañas (Inicio, Encargos, Remesas, Dinero, Informes) y arranque
-js/orders.js            Encargos, estados, cobros, seguimiento y clientes
+js/orders.js            Encargos, productos que llegan, cobros, seguimiento y clientes
+js/flights.js           Vuelos y barcos: lo que sale junto, su precio real y la ganancia de cada vuelta
 js/remit.js             Remesas
-js/money.js             Cuentas, gastos, trabajadores y movimientos
+js/money.js             Cuentas, gastos, trabajadores, aportes de inversionistas y movimientos
 js/closure.js           Cierre del día y su texto
 js/settings.js          Ajustes, bienvenida, copias, avisos, instalación y pantallas de sincronización
 icons/ manual/ preview/ Iconos, manual en PDF y capturas (android/ e ios/)

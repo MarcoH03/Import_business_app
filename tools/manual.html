@@ -72,7 +72,7 @@
     <figure class="ios"><img src="../preview/ios/10-encargos.png" alt=""><figcaption><span class="os i">iPhone</span>Encargos</figcaption></figure>
     <figure><img src="../preview/android/51-informes-negocios.png" alt=""><figcaption><span class="os a">Android</span>Informes</figcaption></figure>
   </div>
-  <div class="meta">Versión 1.1 · Dirección de la app: <b>https://marcoh03.github.io/Import_business_app/</b><br>Las capturas usan datos inventados.</div>
+  <div class="meta">Versión 1.2 · Dirección de la app: <b>https://marcoh03.github.io/Import_business_app/</b><br>Las capturas usan datos inventados.</div>
 </div>
 
 <section style="break-before:auto">
@@ -84,10 +84,10 @@
     <li>La pantalla de Inicio</li>
     <li>Encargos: anotar uno nuevo</li>
     <li>Cómo se calcula el precio</li>
-    <li>Seguir un encargo hasta entregarlo</li>
+    <li>Seguir un encargo: almacén, vuelo y entrega</li>
     <li>Clientes</li>
     <li>Remesas</li>
-    <li>Dinero: tarjeta, efectivo, gastos y trabajadores</li>
+    <li>Dinero: tarjeta, efectivo, gastos, trabajadores e inversionistas</li>
     <li>Informes y ganancia de cada negocio</li>
     <li>Cierre del día</li>
     <li>Avisos de llegada</li>
@@ -207,13 +207,13 @@
   <h3>Rellenar el encargo</h3>
   <ol class="steps">
     <li><b>Cliente</b>: nombre y/o teléfono. <span class="k">Elegir uno anterior</span> rellena los datos de un cliente que ya pidió algo.</li>
-    <li><b>Productos</b>: qué es, el <b>precio que pagaste</b> en la tienda (con impuestos y envío hasta el almacén), la cantidad y, si quieres, el enlace. <span class="k">+ Otro producto</span> añade más.</li>
+    <li><b>Productos</b>: qué es, el <b>precio que pagaste</b> en la tienda (con impuestos y envío hasta el almacén), la cantidad y, si lo sabes, el <b>peso de ese producto</b>. <span class="k">+ Otro producto</span> añade más. Si pones el peso de cada uno, el peso del encargo es la suma.</li>
     <li><b>Tienda y seguimiento</b>: Amazon, SHEIN, Temu… el nº de pedido y el <b>nº de seguimiento</b>. La app reconoce si es de UPS, USPS, FedEx, DHL o Amazon.</li>
     <li><b>Estado</b>: normalmente <i>Comprado</i> (o <i>Por comprar</i> si aún no lo compraste) y la fecha de compra.</li>
     <li><b>Llegada prevista al almacén</b>: escribe la que da la tienda o toca <span class="k">Pegar la fecha que da la tienda</span> (copia antes el texto «Arriving Tuesday, October 14», «Llega el 14 de oct.»…). Si la dejas vacía, la app la calcula con lo que suele tardar esa tienda.</li>
     <li><b>Envío a Cuba</b>: <b>Aéreo</b> o <b>Marítimo</b>, según lo que escoja el cliente. Cada uno trae su cobro por libra, su costo y su tiempo de llegada (debajo se ve la tarifa y la fecha aproximada a Cuba).</li>
-    <li><b>Peso y precio</b>: el peso (aproximado al principio; el real se pone cuando llega al almacén) y el cobro por libra del método elegido (se puede cambiar solo para este encargo).</li>
-    <li><b>Pagos</b>: con qué se pagó la compra y el envío (tarjeta por defecto) y, si el cliente dejó dinero adelantado, cuánto.</li>
+    <li><b>Peso y precio</b>: el peso total (si no lo pusiste por producto; puede ser aproximado y corregirse después) y el cobro por libra del método elegido (se puede cambiar solo para este encargo).</li>
+    <li><b>Pagos</b>: con qué se pagó la compra (tarjeta por defecto) y, si el cliente dejó dinero adelantado, cuánto. El envío no se paga aquí: lo paga cada vuelo (capítulo 7).</li>
   </ol>
   <div class="row">
     <figure><img src="../preview/android/11-nuevo-encargo.png" alt=""><figcaption><span class="os a">Android</span>Nuevo encargo</figcaption></figure>
@@ -234,7 +234,8 @@
   <p>Al cliente se le cobra el producto por lo que costó, más las libras al precio del método que escogió, más (si se activa) un % del producto, más otros cargos:</p>
   <span class="formula">Precio = productos + libras × cobro por libra del método + (% del producto, apagado por defecto) + otros cargos</span>
   <p>Y la ganancia del encargo es lo cobrado menos lo que gastaron ustedes:</p>
-  <span class="formula">Ganancia = precio − productos − libras × lo que nos cuesta la libra en ese método</span>
+  <span class="formula">Ganancia = precio − productos − envío</span>
+  <p>Mientras el encargo no ha salido, el envío es un <b>estimado</b>: libras × lo que nos cuesta la libra en ese método. Cuando sale en un vuelo y anotas lo que pagaste por todo el vuelo, se usa su <b>parte del precio real</b> (capítulo 7), que incluye las cajas y el embalaje.</p>
   <table>
     <tr><th>Ejemplo: bocina de 99.95 USD, 2.5 lb, por aéreo (cobro 5 USD/lb, costo 2.50 USD/lb)</th><th class="num">USD</th></tr>
     <tr><td>Productos</td><td class="num">99.95</td></tr>
@@ -255,7 +256,7 @@
 </section>
 
 <section class="cont">
-  <h2><span class="n">7</span>Seguir un encargo hasta entregarlo</h2>
+  <h2><span class="n">7</span>Seguir un encargo: almacén, vuelo y entrega</h2>
   <div class="split">
     <div class="txt">
       <p>Toca un encargo para ver su ficha: precio, lo que debe, botones para <b>llamar</b> o escribir por <b>WhatsApp</b> al cliente y la <b>línea de tiempo</b> con cada paso, su fecha y los <b>días que tardó</b>; los pasos que faltan muestran la fecha <b>prevista</b>.</p>
@@ -275,33 +276,60 @@
   <table>
     <tr><th style="width:40mm">Botón</th><th>Qué pide y qué hace</th></tr>
     <tr><td><b>Ya lo compré</b></td><td>Para encargos «por comprar». Desde ese día el precio del producto sale de la tarjeta.</td></tr>
-    <tr><td><b>Llegó al almacén</b></td><td>La fecha y el <b>peso real</b> que da el almacén: el precio se recalcula. Muestra los días que tardó desde la compra.</td></tr>
-    <tr><td><b>Enviado a Cuba</b></td><td>La fecha de envío y, si la sabes, la llegada prevista (si no, se calcula con los días del método: aéreo o marítimo). Se descuenta el costo del envío (libras × lo que cuesta la libra en ese método).</td></tr>
-    <tr><td><b>Llegó a Cuba</b></td><td>La fecha. Queda en «En Cuba: listo para entregar».</td></tr>
+    <tr><td><b>Llegó al almacén</b></td><td>Marca <b>qué productos llegaron</b> y la fecha. El peso es opcional: se puede poner ahora o después. Si solo llegó una parte, dice «Llegó el resto (1 de 2 ya están)».</td></tr>
+    <tr><td><b>Enviar a Cuba</b></td><td>Lo añade a un vuelo ya anotado o crea uno nuevo con todo lo del almacén (ver «Los vuelos de los jueves»).</td></tr>
+    <tr><td><b>Llegó a Cuba</b></td><td>Marca su vuelo como llegado: <b>todos</b> los encargos de ese vuelo pasan a «En Cuba: listo para entregar».</td></tr>
     <tr><td><b>Entregado al cliente</b></td><td>La fecha y <b>cuánto cobras ahora</b> (por defecto, lo que falta) y dónde entra: efectivo o tarjeta. Pon 0 si te paga después.</td></tr>
   </table>
   <div class="row">
-    <figure><img src="../preview/android/16-llego-almacen.png" alt=""><figcaption><span class="os a">Android</span>Llegó al almacén: peso real</figcaption></figure>
-    <figure class="ios"><img src="../preview/ios/16-llego-almacen.png" alt=""><figcaption><span class="os i">iPhone</span>Llegó al almacén</figcaption></figure>
-    <figure><img src="../preview/android/17-entregar-cobrar.png" alt=""><figcaption><span class="os a">Android</span>Entregar y cobrar</figcaption></figure>
+    <figure><img src="../preview/android/15b-productos-llegados.png" alt=""><figcaption><span class="os a">Android</span>Lista de productos: 1 de 2 llegó</figcaption></figure>
+    <figure class="ios"><img src="../preview/ios/15b-productos-llegados.png" alt=""><figcaption><span class="os i">iPhone</span>Lista de productos</figcaption></figure>
+    <figure><img src="../preview/android/16-llego-almacen.png" alt=""><figcaption><span class="os a">Android</span>Llegó al almacén</figcaption></figure>
     <figure class="ios"><img src="../preview/ios/17-entregar-cobrar.png" alt=""><figcaption><span class="os i">iPhone</span>Entregar y cobrar</figcaption></figure>
   </div>
+  <h3>Productos que llegan por separado</h3>
+  <p>En la ficha, la lista <b>Productos</b> tiene una casilla por producto: tócala cuando ese producto llegue al almacén (no hace falta poner el peso en ese momento). Cuando están todos, el encargo pasa a <b>En el almacén</b>. Si te equivocaste, vuelve a tocarla. Lo que ya salió en un vuelo muestra su número (toca para abrir el vuelo).</p>
 </section>
 
 <section class="cont">
-  <h3>Enviar varios a Cuba a la vez</h3>
+  <h3>Los vuelos de los jueves</h3>
   <div class="split">
     <div class="txt">
-      <p>Cuando mandas una caja con varios encargos, en <b>Encargos</b> elige el filtro <span class="k">En el almacén</span> y toca <span class="k">Enviar a Cuba</span>. Arriba elige <b>Aéreo</b> o <b>Marítimo</b> (salen por separado; entre paréntesis, cuántos esperan de cada uno), marca los que van, pon la fecha y toca <span class="k">Enviar</span>. La app muestra el peso total y el costo del envío.</p>
-      <h3>Cobros</h3>
-      <p>En la ficha, <span class="k">Registrar cobro</span> anota un pago (adelanto o el resto): importe, fecha y si entró en <b>efectivo</b> (lo normal) o en la <b>tarjeta</b> (si un familiar pagó desde EE. UU.). Toca un cobro para corregirlo o borrarlo. El filtro <b>Deben dinero</b> lista a quien le falta pagar.</p>
-      <h3>Cancelar</h3>
-      <p>Menú <span class="k">⋮ → Cancelar encargo</span>. Si la tienda devuelve el dinero, anótalo con <span class="k">Anotar devolución de la tienda</span>: vuelve a la tarjeta.</p>
-      <div class="note"><b>¿Cuándo cuenta la ganancia?</b>La ganancia de un encargo cuenta el <b>día que se entrega</b>. El dinero, en cambio, se mueve cuando pasa: la compra sale de la tarjeta el día de la compra, el envío el día que se envía y los cobros entran el día que se cobran.</div>
+      <p>Los vuelos salen los <b>jueves</b> (se cambia en Ajustes). Todo lo que está en el almacén espera al próximo jueves: por eso la llegada prevista a Cuba es <b>el próximo jueves + los días que tarda el vuelo</b>, sin importar qué día llegó al almacén. Los barcos salen cualquier día (también se puede fijar uno).</p>
+      <p>El jueves, Inicio muestra <b>«Hoy sale el vuelo: N productos en el almacén»</b>. Tócalo (o en Encargos, el filtro <span class="k">En el almacén</span> → <span class="k">Anotar el vuelo</span>, o el botón del avión arriba → <span class="k">Nuevo vuelo</span>):</p>
+      <ol class="steps">
+        <li>Ya vienen marcados todos los productos <b>aéreos</b> que llegaron al almacén, agrupados por cliente. Quita los que no van. Un encargo puede salir en partes.</li>
+        <li>Revisa el <b>número</b> del vuelo y la <b>fecha de salida</b>.</li>
+        <li>Escribe el <b>peso total real</b> (con cajas y embalaje) y lo que <b>pagaste por todo el envío</b>, y con qué se pagó. Si aún no lo sabes, guárdalo sin eso y complétalo luego.</li>
+        <li>Toca <span class="k">Guardar</span>. Los encargos pasan a «Enviado a Cuba» con el número del vuelo.</li>
+      </ol>
+      <div class="note"><b>El envío sale de la tarjeta una sola vez, con el precio real</b>Lo que anotas como peso de cada producto sirve para cobrarle al cliente; no se descuenta de ninguna cuenta. Solo cuando anotas el vuelo con lo que pagaste, ese precio sale de la tarjeta (o del efectivo) y se reparte entre los productos según sus libras.</div>
     </div>
     <div class="pair">
-      <figure><img src="../preview/android/19-enviar-a-cuba.png" alt=""><figcaption><span class="os a">Android</span>Enviar varios a Cuba</figcaption></figure>
-      <figure class="ios"><img src="../preview/ios/19-enviar-a-cuba.png" alt=""><figcaption><span class="os i">iPhone</span>Enviar varios a Cuba</figcaption></figure>
+      <figure><img src="../preview/android/19-enviar-a-cuba.png" alt=""><figcaption><span class="os a">Android</span>Nuevo vuelo: lo que va</figcaption></figure>
+      <figure class="ios"><img src="../preview/ios/19b-vuelo-peso-precio.png" alt=""><figcaption><span class="os i">iPhone</span>Peso y precio reales</figcaption></figure>
+    </div>
+  </div>
+  <h3>La ganancia de cada vuelta</h3>
+  <div class="split">
+    <div class="txt">
+      <p>La ficha del vuelo muestra:</p>
+      <ul>
+        <li><b>Ganancia prevista</b>: lo que se cobra por todo lo que lleva − el precio de los productos − lo que pagaste por el envío.</li>
+        <li><b>Ya hecha</b>: va subiendo a medida que entregas los encargos de ese vuelo (cuántos de cuántos).</li>
+        <li><b>Peso y envío</b>: el peso de los productos (lo que pagan los clientes), el peso real, la diferencia por cajas y embalaje, lo cobrado por libras, el costo por libra real y «libras cobradas − envío».</li>
+        <li>Los encargos que lleva, con su estado y su ganancia.</li>
+      </ul>
+      <p>Cuando llega, toca <span class="k">Llegó a Cuba</span>. La lista de todos los vuelos está en Encargos → botón del avión: los que están en camino y los que llegaron, con la ganancia hecha y la prevista.</p>
+      <h3>Cobros</h3>
+      <p>En la ficha del encargo, <span class="k">Registrar cobro</span> anota un pago (adelanto o el resto): importe, fecha y si entró en <b>efectivo</b> (lo normal) o en la <b>tarjeta</b> (si un familiar pagó desde EE. UU.). El filtro <b>Deben dinero</b> lista a quien le falta pagar.</p>
+      <h3>Cancelar</h3>
+      <p>Menú <span class="k">⋮ → Cancelar encargo</span>. Si la tienda devuelve el dinero, anótalo con <span class="k">Anotar devolución de la tienda</span>: vuelve a la tarjeta.</p>
+      <div class="note"><b>¿Cuándo cuenta la ganancia?</b>La de un encargo cuenta el <b>día que se entrega</b>. El dinero se mueve cuando pasa: la compra sale de la tarjeta el día de la compra, el vuelo el día que lo anotas con su precio y los cobros entran el día que se cobran.</div>
+    </div>
+    <div class="pair">
+      <figure><img src="../preview/android/22-vuelo.png" alt=""><figcaption><span class="os a">Android</span>Ficha del vuelo</figcaption></figure>
+      <figure class="ios"><img src="../preview/ios/23-vuelos.png" alt=""><figcaption><span class="os i">iPhone</span>Vuelos y barcos</figcaption></figure>
     </div>
   </div>
 
@@ -352,14 +380,14 @@
 </section>
 
 <section>
-  <h2><span class="n">10</span>Dinero: tarjeta, efectivo, gastos y trabajadores</h2>
+  <h2><span class="n">10</span>Dinero: tarjeta, efectivo, gastos, trabajadores e inversionistas</h2>
   <div class="split">
     <div class="txt">
       <p>La pestaña <b>Dinero</b> muestra el saldo de la <b>tarjeta EE. UU.</b> y del <b>efectivo en Cuba</b> y lo que falta por mover: lo que deben los clientes, las remesas por entregar, las transferencias por llegar y los envíos aún por pagar.</p>
-      <p>Debajo, tres vistas por mes: <b>Gastos</b>, <b>Trabajadores</b> y <b>Movimientos</b> (todo lo que entró y salió de las dos cuentas).</p>
+      <p>Debajo, cuatro vistas: <b>Gastos</b>, <b>Pagos</b> a trabajadores, <b>Aportes</b> de socios e inversionistas y <b>Movimientos</b> (todo lo que entró y salió de las dos cuentas, también los vuelos).</p>
       <p>Toca una cuenta para ver sus movimientos y los botones:</p>
       <ul>
-        <li><b>Añadir</b>: dinero que ponen los socios.</li>
+        <li><b>Añadir</b>: dinero que entra sin apuntarlo a nadie (si lo pone una persona, mejor anótalo como aporte).</li>
         <li><b>Retirar</b>: reparto de ganancias u otros.</li>
         <li><b>Pasar</b>: de tarjeta a efectivo o al revés (si alguien lleva efectivo y lo deposita). Las remesas ya lo hacen solas.</li>
         <li><b>Contar</b>: escribes lo que hay de verdad y la app ajusta el saldo.</li>
@@ -375,14 +403,30 @@
       <h3 style="margin-top:0">Gastos del negocio</h3>
       <p><span class="k">+ Nuevo gasto</span> (o «Gasto» en Inicio): categoría (recargas, transporte, embalaje, comisiones del banco…; <span class="k">+ Nueva</span> crea otra), importe, con qué se pagó, la fecha y <b>de qué negocio es</b>: Encargos, Remesas o <b>Los dos</b> (se reparte a medias).</p>
       <h3>Trabajadores</h3>
-      <p>En <span class="k">Trabajadores</span> añade a quienes trabajan para el negocio (mensajero, ayudante…). <span class="k">Pagar</span> anota cada pago: a quién, cuánto, con qué cuenta, para qué negocio trabajó y un detalle («semana del 1 al 7»). Los pagos se restan de la ganancia neta del negocio elegido.</p>
+      <p>En <span class="k">Pagos → Trabajadores e inversionistas</span> añade a quienes trabajan para el negocio (mensajero, ayudante…). <span class="k">Pagar</span> anota cada pago: a quién, cuánto, con qué cuenta, para qué negocio trabajó y un detalle («semana del 1 al 7»). Los pagos se restan de la ganancia neta del negocio elegido.</p>
     </div>
     <div class="pair">
       <figure><img src="../preview/android/42-nuevo-gasto.png" alt=""><figcaption><span class="os a">Android</span>Nuevo gasto</figcaption></figure>
       <figure class="ios"><img src="../preview/ios/44-pago-trabajador.png" alt=""><figcaption><span class="os i">iPhone</span>Pago a un trabajador</figcaption></figure>
     </div>
   </div>
-  <div class="tip"><b>Los saldos no se escriben: se calculan</b>La tarjeta y el efectivo salen de todo lo anotado (compras, envíos, cobros, remesas, gastos, pagos y movimientos). Si algo se anotó mal, corrígelo y el saldo se arregla solo.</div>
+  <div class="split">
+    <div class="txt">
+      <h3 style="margin-top:0">Aportes de socios e inversionistas</h3>
+      <p>Para llevar cuánto dinero ha puesto cada persona en el negocio y cuánto hay que devolverle:</p>
+      <ol class="steps">
+        <li>Añade a la persona (tipo <b>Inversionista</b>, o <b>Los dos</b> si además trabaja).</li>
+        <li><span class="k">Anotar aporte</span>: cuánto puso, cuándo y en qué cuenta entró.</li>
+        <li><span class="k">Devolverle</span>: cuánto se le devolvió y de qué cuenta salió.</li>
+      </ol>
+      <p>Su ficha muestra <b>aportado, devuelto y lo que falta por devolverle</b>; la vista <b>Aportes</b> de Dinero muestra el total del negocio y a quién se le debe. Los aportes y devoluciones mueven el dinero de las cuentas, pero <b>no cuentan como ganancia ni como gasto</b>.</p>
+    </div>
+    <div class="pair">
+      <figure><img src="../preview/android/47-inversionista.png" alt=""><figcaption><span class="os a">Android</span>Lo que se le debe</figcaption></figure>
+      <figure class="ios"><img src="../preview/ios/45-aportes.png" alt=""><figcaption><span class="os i">iPhone</span>Aportes en Dinero</figcaption></figure>
+    </div>
+  </div>
+  <div class="tip"><b>Los saldos no se escriben: se calculan</b>La tarjeta y el efectivo salen de todo lo anotado (compras, vuelos, cobros, remesas, gastos, pagos, aportes y movimientos). Si algo se anotó mal, corrígelo y el saldo se arregla solo.</div>
 </section>
 
 <section>
@@ -455,7 +499,7 @@
 
 <section>
   <h2><span class="n">13</span>Avisos de llegada</h2>
-  <p>La app te recuerda cuándo un encargo debe llegar <b>al almacén</b> y <b>a Cuba</b>, unos días antes (2 por defecto, en <span class="k">Ajustes → Avisar con</span>) y el mismo día:</p>
+  <p>La app te recuerda cuándo un encargo debe llegar <b>al almacén</b> y <b>a Cuba</b>, unos días antes (2 por defecto, en <span class="k">Ajustes → Avisar con</span>) y el mismo día. El día que sale el vuelo, si hay productos en el almacén, también avisa:</p>
   <ul>
     <li><b>En la app</b>, siempre: en Inicio, «Llegan pronto» y «Atrasados»; en la lista de encargos, cada uno dice cuándo llega.</li>
     <li><b>Avisos del teléfono</b>: actívalos en <span class="k">Ajustes → Avisos en el teléfono</span> y da permiso. En <b>Android</b> con la app instalada, Chrome puede mostrarlos aunque la app esté cerrada (lo decide el teléfono, normalmente una o dos veces al día); si no, salen al abrir la app. En <b>iPhone</b> (iOS 16.4 o más nuevo, con la app añadida a la pantalla de inicio) salen al abrir la app.</li>
@@ -465,7 +509,7 @@
   <ol>
     <li>La que escribas tú o pegues desde la tienda (lo más exacto).</li>
     <li>Si no, la fecha de compra + lo que suele tardar esa tienda: primero lo aprendido con tus encargos (3 o más), si no los días de <span class="k">Ajustes → Días que tarda cada tienda</span>.</li>
-    <li>A Cuba: la fecha de envío + los días del método del encargo, <b>aéreo</b> o <b>marítimo</b> (aprendidos con 3 o más envíos de ese método, o los de Ajustes).</li>
+    <li>A Cuba: si todavía no salió, el <b>próximo día de salida</b> después de llegar al almacén (el jueves, para el aéreo) + los días que tarda ese método desde que sale. Si ya salió, la fecha del vuelo + esos días (aprendidos con 3 o más envíos de ese método, o los de Ajustes).</li>
   </ol>
   <div class="note"><b>¿Y el rastreo automático?</b>Amazon y SHEIN no dejan que otras apps lean sus pedidos, así que la app no puede saber sola cuándo llega un paquete. Lo que sí hace: reconoce la empresa del nº de seguimiento, abre su página de rastreo con un toque, lee la fecha si pegas el texto de la tienda y aprende cuánto tarda cada tienda de verdad.</div>
 </section>
@@ -547,12 +591,12 @@
       <table>
         <tr><th>Ajuste</th><th>Para qué</th></tr>
         <tr><td>Tu nombre</td><td>Firma de tus cambios (se ve en las fichas y en la sincronización).</td></tr>
-        <tr><td>Envío aéreo y envío marítimo</td><td>Para cada uno: cobro por libra al cliente, lo que nos cuesta la libra y los días del almacén a Cuba.</td></tr>
+        <tr><td>Envío aéreo y envío marítimo</td><td>Para cada uno: cobro por libra al cliente, lo que calculamos que cuesta la libra (estimado hasta anotar el vuelo), el <b>día que sale</b> (jueves para el aéreo) y los días desde que sale hasta Cuba.</td></tr>
         <tr><td>Método por defecto</td><td>El que aparece marcado en los encargos nuevos.</td></tr>
         <tr><td>Cobrar libras completas</td><td>Redondea el peso hacia arriba.</td></tr>
         <tr><td>Sumar un % del producto</td><td>Apagado por defecto; el % que se usa al encenderlo.</td></tr>
         <tr><td>Redondear el precio final</td><td>A 0.50, 1 o 5 USD hacia arriba.</td></tr>
-        <tr><td>Compras y envío se pagan con</td><td>Tarjeta o efectivo (se puede cambiar en cada encargo).</td></tr>
+        <tr><td>Compras y vuelos se pagan con</td><td>Tarjeta o efectivo (se puede cambiar en cada encargo o vuelo).</td></tr>
         <tr><td>Comisión por defecto</td><td>De las remesas nuevas.</td></tr>
         <tr><td>Avisar con</td><td>Antelación de los avisos de llegada.</td></tr>
         <tr><td>Días por tienda, Tiendas, Categorías de gastos</td><td>Listas que se usan en los formularios.</td></tr>
@@ -579,7 +623,11 @@
     <dt>Un cliente pagó una parte por adelantado.</dt>
     <dd>Escríbelo en «El cliente adelantó» al crear el encargo, o en la ficha con <b>Registrar cobro</b>. Al entregar, la app propone cobrar solo lo que falta.</dd>
     <dt>Compré varias cosas de distintos clientes en un mismo pedido de Amazon.</dt>
-    <dd>Haz un encargo por cliente con el mismo nº de pedido y de seguimiento. En el almacén podrás enviarlos juntos con «Enviar a Cuba».</dd>
+    <dd>Haz un encargo por cliente con el mismo nº de pedido y de seguimiento. En el almacén saldrán juntos en el vuelo.</dd>
+    <dt>¿Cuándo se descuenta el envío de la tarjeta?</dt>
+    <dd>Solo al anotar el vuelo con lo que pagaste por todo. El peso de cada producto sirve para cobrarle al cliente, no para descontar dinero. Mientras un vuelo no tiene precio, sale «Falta el precio» y la ganancia se calcula con el costo estimado.</dd>
+    <dt>Un encargo llegó al almacén en partes.</dt>
+    <dd>Marca cada producto en su ficha cuando llegue. Puede salir en partes también: en el vuelo marca solo lo que va.</dd>
     <dt>¿Por qué un encargo dice «(aprox.)»?</dt>
     <dd>Porque la fecha prevista es calculada (o el peso no es el real todavía). Escribe la fecha que da la tienda o el peso del almacén y desaparece.</dd>
     <dt>El cliente cambió de aéreo a marítimo (o al revés).</dt>

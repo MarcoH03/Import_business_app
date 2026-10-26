@@ -5,12 +5,14 @@ import {
   STATUS, STATUS_LABEL, STATUS_DATE, ACCOUNTS, ACC_SHORT, order, newOrder, orderCalc, orderTitle, clientLabel, orderEta,
   transitStats, storeDays, cubaDays, reached, statusIdx, guessCarrier, trackingUrl, storeOrderUrl, parseArrival, icsEvent,
   clients, clientKey, ordersOfClient, isOpen, METHODS, methodOf, methodLabel, methodRates, withMethod,
+  orderLbs, itemLbs, hasItemWeights, itemArrived, legacyShipped, flight, tripName, syncOrderStatus, WEEKDAY_NAMES, parseDate,
 } from './store.js';
 import {
   $, esc, openPage, topPage, dialog, confirmDlg, promptDlg, menuSheet, snackbar, pickFromList, chips, seg, tf, inp, numInp, toggle, li, kv,
   secTitle, emptyState, contactBtns, vibrate,
 } from './ui.js';
 import { commit, shareText, openCalendarFile } from './core.js';
+import { flightEditor, flightDetail, arriveFlight, openTrips } from './flights.js';
 
 export const STATUS_COLOR = { pendiente: 'amber', comprado: 'blue', almacen: 'purple', enviado: 'teal', cuba: 'green', entregado: 'gray', cancelado: 'red' };
 export const STATUS_ICON = { pendiente: 'cart', comprado: 'card', almacen: 'store', enviado: 'plane', cuba: 'pin', entregado: 'checkCircle', cancelado: 'close' };
@@ -22,7 +24,19 @@ export function nextStatus(o) {
   if (!isOpen(o)) return null;
   return STATUS[statusIdx(o.status) + 1]?.[0] || null;
 }
-const NEXT_LABEL = { comprado: 'Ya lo compré', almacen: 'Llegó al almacén', enviado: 'Enviado a Cuba', cuba: 'Llegó a Cuba', entregado: 'Entregado al cliente' };
+const NEXT_LABEL = { comprado: 'Ya lo compré', almacen: 'Llegó al almacén', enviado: 'Enviar a Cuba', cuba: 'Llegó a Cuba', entregado: 'Entregado al cliente' };
+
+/** «hoy», «mañana» o «el jueves 29/10». */
+export function departureLabel(date) {
+  if (!date) return '';
+  const n = daysBetween(today(), date);
+  if (n <= 0) return 'hoy';
+  if (n === 1) return 'mañana';
+  return `el ${WEEKDAY_NAMES[parseDate(date).getDay()]} ${fmtDate(date).slice(0, 5)}`;
+}
+/** Vuelos o barcos en los que va el encargo. */
+export const tripsOf = (o) => [...new Set(o.items.map((it) => it.flight).filter(Boolean))].map(flight).filter(Boolean);
+const arrivedCount = (o) => o.items.filter((it) => itemArrived(o, it)).length;
 
 /** Texto corto de dónde está y cuándo llega. */
 export function etaLine(o, ts = transitStats()) {
@@ -30,9 +44,19 @@ export function etaLine(o, ts = transitStats()) {
   const d = o.dates || {};
   const late = (date) => date < today();
   if (o.status === 'pendiente') return '<span class="amber-t">Falta comprarlo</span>';
-  if (o.status === 'comprado') return late(e.warehouse) ? `<span class="red-t">${icon('warning')}Debió llegar al almacén ${relDay(e.warehouse)}</span>` : `Llega al almacén ${relDay(e.warehouse)}${e.whAuto ? ' (aprox.)' : ''}`;
-  if (o.status === 'almacen') return `En el almacén desde ${relDay(d.warehouse)} · falta enviarlo`;
-  if (o.status === 'enviado') return late(e.cuba) ? `<span class="red-t">${icon('warning')}Debió llegar a Cuba ${relDay(e.cuba)}</span>` : `Llega a Cuba ${relDay(e.cuba)}${e.cubaAuto ? ' (aprox.)' : ''}`;
+  const part = arrivedCount(o);
+  if (o.status === 'comprado') {
+    const pre = part ? `${part} de ${o.items.length} en el almacén · ` : '';
+    return late(e.warehouse) ? `${pre}<span class="red-t">${icon('warning')}Debió llegar al almacén ${relDay(e.warehouse)}</span>` : `${pre}Llega al almacén ${relDay(e.warehouse)}${e.whAuto ? ' (aprox.)' : ''}`;
+  }
+  if (o.status === 'almacen') {
+    const flown = o.items.filter((it) => it.flight).length;
+    return `En el almacén${flown ? ` (${flown} ya salieron)` : ''} · sale ${departureLabel(e.departure) || 'en el próximo envío'}`;
+  }
+  if (o.status === 'enviado') {
+    const t = tripsOf(o).map(tripName).join(', ');
+    return late(e.cuba) ? `${t ? `${t} · ` : ''}<span class="red-t">${icon('warning')}Debió llegar a Cuba ${relDay(e.cuba)}</span>` : `${t ? `${t} · ` : ''}Llega a Cuba ${relDay(e.cuba)}${e.cubaAuto ? ' (aprox.)' : ''}`;
+  }
   if (o.status === 'cuba') return `<span class="green-t">En Cuba: listo para entregar</span>`;
   if (o.status === 'entregado') return `Entregado el ${fmtDate(d.delivered)}`;
   return 'Cancelado';
@@ -61,7 +85,7 @@ function priceRows(o) {
     ${extraSum ? kv(o.priceOverride !== '' && o.priceOverride != null ? 'Ajuste al precio acordado' : 'Redondeo', usd(extraSum)) : ''}
     <div class="divider"></div>
     ${kv('Precio al cliente', usd(k.total), 'big')}
-    ${kv(`Nuestro costo: producto + envío ${methodLabel(methodOf(o)).toLowerCase()} ${lbs(k.lb)} × ${usd(o.lbCost)}`, usd(k.cost), 'dim')}
+    ${kv(`Nuestro costo: producto + envío ${k.shipReal ? `(parte del precio real de ${tripsOf(o).map(tripName).join(', ')})` : k.shipAlloc ? '(parte real del vuelo + estimado)' : `${methodLabel(methodOf(o)).toLowerCase()} ${lbs(k.lb)} × ${usd(o.lbCost)} (estimado)`}`, usd(k.cost), 'dim')}
     ${kv('Ganancia', usd(k.profit), k.profit < 0 ? 'red strong' : 'green strong')}`;
 }
 
@@ -93,13 +117,14 @@ export function orderEditor(id = null, prefill = {}) {
           <div class="card item-card">
             <div class="ic-top"><span class="lbl">Producto ${d.items.length > 1 ? i + 1 : ''}</span>${d.items.length > 1 ? `<button class="icon-btn" data-act="delItem" data-i="${i}" aria-label="Quitar">${icon('trash')}</button>` : ''}</div>
             ${tf('Qué es', inp(`items.${i}.desc`, it.desc, 'placeholder="Ej. Zapatos Nike talla 9"'))}
-            <div class="row2">
+            <div class="row3">
               ${tf('Precio pagado', numInp(`items.${i}.price`, it.price, 'placeholder="0.00"'), { suffix: 'USD' })}
               ${tf('Cantidad', numInp(`items.${i}.qty`, it.qty, 'inputmode="numeric"'))}
+              ${tf('Peso', numInp(`items.${i}.w`, it.w ?? '', 'placeholder="—"'), { suffix: 'lb' })}
             </div>
             ${tf('Enlace (opcional)', inp(`items.${i}.url`, it.url, 'type="url" inputmode="url" placeholder="https://…"'))}
           </div>`).join('')}
-        <div class="tf-help">El precio que pagaste en la tienda por cada unidad, con impuestos y envío hasta el almacén.</div>
+        <div class="tf-help">El precio que pagaste en la tienda por cada unidad, con impuestos y envío hasta el almacén. El peso (de todas las unidades) es opcional: si lo pones en cada producto, el peso del encargo es la suma.</div>
         <button class="btn tonal" data-act="addItem">${icon('plus')} Otro producto</button>
 
         ${secTitle('Tienda y seguimiento')}
@@ -108,7 +133,8 @@ export function orderEditor(id = null, prefill = {}) {
         ${tf('Nº de seguimiento (opcional)', inp('tracking', d.tracking, 'placeholder="Ej. 1Z…, TBA…, 9400…" autocapitalize="characters"'), { help: `<span data-carrier>${carrier ? `Parece de <b>${carrier}</b>.` : 'Lo da la tienda cuando envía el paquete.'}</span>` })}
 
         ${secTitle('Estado')}
-        ${chips('status', STATUS.map(([k, l]) => [k, l]), d.status)}
+        ${existing && reached(existing, 'enviado') ? `<div class="card">${statusBadge(d.status)} <span class="dim">${tripsOf(existing).map(tripName).join(', ') || 'Se cambia desde la ficha del encargo'}</span></div>`
+          : chips('status', STATUS.slice(0, 3).map(([k, l]) => [k, l]), d.status)}
         ${reached(d, 'comprado') ? tf('Fecha de compra', `<input class="inp" type="date" data-bind="dates.bought" value="${d.dates.bought || today()}">`) : ''}
         ${d.status === 'comprado' ? `
           ${tf('Llegada prevista al almacén', `<input class="inp" type="date" data-bind="etaWarehouse" value="${d.etaWarehouse || ''}">`, { help: d.etaWarehouse ? 'Escrita por ti.' : `Si la dejas vacía: ${fmtDate(e.warehouse)} (${esc(d.store)} suele tardar ${storeDays(d.store, ts)} días).` })}
@@ -119,10 +145,7 @@ export function orderEditor(id = null, prefill = {}) {
         <div class="tf-help">${methodHelp(d.method, e.cuba, e.cubaAuto)}</div>
 
         ${secTitle('Peso y precio')}
-        <div class="row2">
-          ${tf('Peso', numInp('weightLb', d.weightLb, 'placeholder="0.0"'), { suffix: 'lb' })}
-          ${tf('Cobro por libra', numInp('lbPrice', d.lbPrice), { suffix: 'USD' })}
-        </div>
+        <div class="row2" data-wrow>${weightRow(d)}</div>
         <label class="li check-li"><span class="grow"><span class="t">Es el peso real del almacén</span><span class="s">Si no, es un cálculo aproximado</span></span>${toggle('weightReal', d.weightReal)}</label>
         <label class="li check-li"><span class="grow"><span class="t">Cobrar un % del precio del producto</span><span class="s">Apagado por defecto</span></span>${toggle('feeOn', d.feeOn)}</label>
         ${d.feeOn ? tf('Porcentaje', numInp('feePct', d.feePct), { suffix: '%' }) : ''}
@@ -137,21 +160,27 @@ export function orderEditor(id = null, prefill = {}) {
           <div class="form inner">
             ${tf('Precio acordado (opcional)', numInp('priceOverride', d.priceOverride, `placeholder="${orderCalc({ ...d, priceOverride: '' }).total}"`), { suffix: 'USD', help: 'Si le cobras un precio cerrado, escríbelo aquí y se usa en lugar del calculado.' })}
             ${tf('Nos cuesta la libra', numInp('lbCost', d.lbCost), { suffix: 'USD' })}
-            ${tf('Costo total del envío (opcional)', numInp('shipCost', d.shipCost, `placeholder="${round2(orderCalc({ ...d, shipCost: '' }).shipCost)}"`), { suffix: 'USD', help: 'Déjalo vacío para calcularlo con el peso.' })}
+            ${tf('Costo de envío fijo (opcional)', numInp('shipCost', d.shipCost, `placeholder="${round2(orderCalc({ ...d, shipCost: '' }).shipCost)}"`), { suffix: 'USD', help: 'Normalmente déjalo vacío: mientras no sale, se estima con las libras; cuando sale, se usa su parte del precio real del vuelo.' })}
           </div>
         </details>
 
         ${secTitle('Pagos')}
         <div class="lbl">La compra en la tienda se pagó con</div>
         ${seg('payFrom', Object.entries(ACC_SHORT), d.payFrom)}
-        <div class="lbl">El envío a Cuba se paga con</div>
-        ${seg('shipFrom', Object.entries(ACC_SHORT), d.shipFrom)}
         ${!existing ? `${tf('El cliente adelantó (opcional)', numInp('advance', d.advance || '', 'placeholder="0"'), { suffix: 'USD', help: 'Se anota como cobro en efectivo de hoy.' })}` : ''}
         ${tf('Nota (opcional)', inp('note', d.note, 'placeholder="Ej. color negro, regalo de cumpleaños"'))}
       </div>`;
     },
     afterBind: (pg, key) => {
       if (['feeOn', 'weightReal'].includes(key)) return pg.render();
+      // Peso de cada producto: se actualiza el total sin perder el teclado.
+      if (/^items\.\d+\.w$/.test(key) || key === 'lbPrice') {
+        const wr = $('[data-wrow]', pg.body);
+        const had = !!wr.querySelector('[data-bind="weightLb"]');
+        if (had === hasItemWeights(d) || key === 'lbPrice') {
+          if (!had) wr.querySelector('[data-wsum]').textContent = lbs(orderLbs(d));
+        } else wr.innerHTML = weightRow(d);
+      }
       const s = $('[data-sum]', pg.body);
       if (s) s.innerHTML = priceRows(d);
       if (key === 'tracking') {
@@ -164,7 +193,15 @@ export function orderEditor(id = null, prefill = {}) {
       chip: (el, ev, pg) => {
         const { name, v } = el.dataset;
         d[name] = v;
-        if (name === 'status') ensureDates(d);
+        if (name === 'status') {
+          // «En el almacén» al crear: todos los productos llegaron hoy. Volver atrás quita las llegadas.
+          for (const it of d.items) {
+            if (it.flight) continue;
+            if (v === 'almacen') it.arrived = it.arrived || today();
+            else it.arrived = '';
+          }
+          ensureDates(d);
+        }
         pg.render();
       },
       seg: (el, ev, pg) => {
@@ -224,8 +261,8 @@ export function orderEditor(id = null, prefill = {}) {
         const rec = {
           ...d,
           client: { name: d.client.name.trim(), phone: d.client.phone.trim() },
-          items: d.items.map((it) => ({ desc: it.desc.trim(), qty: num(it.qty) || 1, price: round2(num(it.price)), url: it.url.trim() })),
-          weightLb: d.weightLb === '' ? '' : round2(num(d.weightLb)),
+          items: d.items.map((it) => ({ ...it, desc: it.desc.trim(), qty: num(it.qty) || 1, price: round2(num(it.price)), url: (it.url || '').trim(), w: it.w === '' || it.w == null ? '' : round2(num(it.w)) })),
+          weightLb: hasItemWeights(d) ? orderLbs(d) : d.weightLb === '' ? '' : round2(num(d.weightLb)),
           lbPrice: num(d.lbPrice), lbCost: num(d.lbCost), feePct: num(d.feePct),
           extras: (d.extras || []).filter((x) => x.label.trim() || num(x.amount)).map((x) => ({ label: x.label.trim(), amount: round2(num(x.amount)) })),
           priceOverride: d.priceOverride === '' ? '' : round2(num(d.priceOverride)),
@@ -235,6 +272,7 @@ export function orderEditor(id = null, prefill = {}) {
         };
         delete rec.advance;
         ensureDates(rec);
+        syncOrderStatus(rec);
         if (!existing && num(d.advance) > 0) rec.payments = [{ id: uid(), ts: Date.now(), date: today(), amount: round2(num(d.advance)), account: 'efectivo' }];
         const cur = order(rec.id);
         if (cur) Object.assign(cur, rec);
@@ -248,10 +286,19 @@ export function orderEditor(id = null, prefill = {}) {
   });
 }
 
+/** Peso del encargo: el total si no hay peso por producto; si lo hay, la suma (no se escribe). */
+function weightRow(d) {
+  const w = hasItemWeights(d)
+    ? `<div class="tf"><span class="tf-l">Peso total</span><span class="inp ro"><span data-wsum>${lbs(orderLbs(d))}</span></span><span class="tf-suf">suma</span></div>`
+    : tf('Peso del encargo', numInp('weightLb', d.weightLb, 'placeholder="0.0"'), { suffix: 'lb' });
+  return `${w}${tf('Cobro por libra', numInp('lbPrice', d.lbPrice), { suffix: 'USD' })}`;
+}
+
 /** Tarifas y tiempo del método elegido, para el formulario. */
 function methodHelp(m, cuba, auto) {
   const r = methodRates(m);
-  return `${methodLabel(m)}: ${usd(r.lbPrice)}/lb al cliente · nos cuesta ${usd(r.lbCost)}/lb · unos ${cubaDays(m)} días del almacén a Cuba${cuba ? ` (llegada ${auto ? 'aprox.' : 'prevista'} ${fmtDate(cuba)})` : ''}.`;
+  const dep = r.depart >= 0 ? `sale los ${WEEKDAY_NAMES[r.depart]} y llega en unos ${cubaDays(m)} días` : `unos ${cubaDays(m)} días desde que sale`;
+  return `${methodLabel(m)}: ${usd(r.lbPrice)}/lb al cliente · nos cuesta ${usd(r.lbCost)}/lb (estimado) · ${dep}${cuba ? ` (llegada ${auto ? 'aprox.' : 'prevista'} ${fmtDate(cuba)})` : ''}.`;
 }
 
 /** Pone fecha de hoy a los estados alcanzados que no la tengan (y quita las de estados posteriores). */
@@ -319,10 +366,10 @@ export function orderDetail(id) {
         <div class="hero">
           <div class="hero-main"><span class="hero-u">${esc(clientLabel(o.client))}${o.client.phone && o.client.name ? ` · ${esc(o.client.phone)}` : ''}</span><span class="hero-n">${usd(k.total)}</span>
           <span class="hero-u">${esc(orderTitle(o))}</span></div>
-          <div class="hero-badges">${statusBadge(o.status)}${k.due > 0.004 ? `<span class="badge amber">Debe ${usd(k.due)}</span>` : k.paid ? `<span class="badge green">${icon('check')}Pagado</span>` : ''}<span class="badge ${methodOf(o) === 'maritimo' ? 'teal' : 'blue'}">${icon(METHODS[methodOf(o)].ic)}${methodLabel(methodOf(o))}</span>${o.weightLb !== '' ? `<span class="badge">${icon('scale')}${lbs(o.weightLb)}${o.weightReal ? '' : ' aprox.'}</span>` : ''}</div>
+          <div class="hero-badges">${statusBadge(o.status)}${k.due > 0.004 ? `<span class="badge amber">Debe ${usd(k.due)}</span>` : k.paid ? `<span class="badge green">${icon('check')}Pagado</span>` : ''}<span class="badge ${methodOf(o) === 'maritimo' ? 'teal' : 'blue'}">${icon(METHODS[methodOf(o)].ic)}${methodLabel(methodOf(o))}</span>${orderLbs(o) ? `<span class="badge">${icon('scale')}${lbs(orderLbs(o))}${o.weightReal ? '' : ' aprox.'}</span>` : ''}</div>
           ${contactBtns(o.client.phone)}
         </div>
-        ${nx ? `<button class="btn filled block lg" data-act="advance" data-to="${nx}">${icon(STATUS_ICON[nx])} ${NEXT_LABEL[nx]}</button>` : ''}
+        ${nx ? `<button class="btn filled block lg" data-act="advance" data-to="${nx}">${icon(nx === 'enviado' ? METHODS[methodOf(o)].ic : STATUS_ICON[nx])} ${nx === 'almacen' && arrivedCount(o) ? `Llegó el resto (${arrivedCount(o)} de ${o.items.length} ya están)` : nx === 'enviado' ? `Enviar a Cuba (${METHODS[methodOf(o)].trip.toLowerCase()})` : NEXT_LABEL[nx]}</button>` : ''}
         ${secTitle('Seguimiento')}
         <div class="list timeline">${timeline(o, e)}</div>
         ${o.tracking || sUrl ? `<div class="btn-row wrap pad-h">
@@ -332,12 +379,9 @@ export function orderDetail(id) {
         ${o.tracking ? `<p class="hint">Nº de seguimiento: <b class="sel">${esc(o.tracking)}</b>${o.storeOrder ? ` · Pedido: <b class="sel">${esc(o.storeOrder)}</b>` : ''}</p>` : o.storeOrder ? `<p class="hint">Pedido en ${esc(o.store)}: <b class="sel">${esc(o.storeOrder)}</b></p>` : ''}
         ${o.status === 'comprado' || o.status === 'enviado' ? `<button class="btn tonal block" data-act="calendar">${icon('calPlus')} Recordármelo en el calendario</button>` : ''}
         ${o.status === 'comprado' ? `<button class="btn text block" data-act="pasteEta">${icon('clipboard')} Pegar la fecha de llegada que da la tienda</button>` : ''}
-        ${secTitle('Productos')}
-        <div class="list">${o.items.map((it) => li({
-          title: `${num(it.qty) > 1 ? `${num(it.qty)} × ` : ''}${esc(it.desc || 'Producto')}`,
-          sub: `${usd(it.price)}${num(it.qty) > 1 ? ' c/u' : ''}${it.url ? ` · <a href="${esc(it.url)}" target="_blank" rel="noopener">ver enlace</a>` : ''}`,
-          right: usd(num(it.qty) * num(it.price)),
-        })).join('')}</div>
+        ${secTitle('Productos', checkable(o) && o.items.length > 1 ? `<span>${arrivedCount(o)} de ${o.items.length} en el almacén</span>` : '')}
+        <div class="list">${itemRows(o)}</div>
+        ${checkable(o) ? '<p class="hint">Marca cada producto cuando llegue al almacén; el peso puede ponerse luego. Cuando estén todos, el encargo pasa a «En el almacén» y sale en el próximo envío.</p>' : ''}
         ${secTitle('Precio y ganancia')}
         <div class="card">${priceRows(o)}</div>
         ${secTitle('Cobros', o.status !== 'cancelado' ? '<button class="text-btn" data-act="pay">Registrar cobro</button>' : '')}
@@ -345,11 +389,29 @@ export function orderDetail(id) {
           ${k.due > 0.004 ? `<div class="li due-li"><span class="grow"><span class="t">Falta por cobrar</span></span><b class="amber-t">${usd(k.due)}</b></div>` : ''}</div>
         ${o.status === 'cancelado' ? `<button class="btn tonal block" data-act="refund">${icon('undo')} ${o.refund ? 'Cambiar la devolución' : 'Anotar devolución de la tienda'}</button>` : ''}
         ${o.note ? `<div class="card note-card">${icon('edit')}<span>${esc(o.note)}</span></div>` : ''}
-        <p class="hint">${icon('info')} Pagado con ${ACC_SHORT[o.payFrom].toLowerCase()}; envío con ${ACC_SHORT[o.shipFrom].toLowerCase()}.${o.by ? ` Último cambio: ${esc(o.by)}.` : ''}</p>`;
+        <p class="hint">${icon('info')} Compra pagada con ${ACC_SHORT[o.payFrom].toLowerCase()}. ${legacyShipped(o) ? `Envío pagado con ${ACC_SHORT[o.shipFrom].toLowerCase()}.` : 'El envío se paga al anotar el vuelo con su precio real.'}${o.by ? ` Último cambio: ${esc(o.by)}.` : ''}</p>`;
     },
     acts: {
-      advance: (el) => statusPage(id, el.dataset.to),
-      step: (el) => editStepDate(id, el.dataset.s),
+      advance: (el) => advance(id, el.dataset.to),
+      step: (el) => {
+        const o = order(id);
+        const t = tripsOf(o);
+        if (t.length && ['enviado', 'cuba'].includes(el.dataset.s)) return flightDetail(t[0].id);
+        editStepDate(id, el.dataset.s);
+      },
+      arrive: async (el) => {
+        const o = order(id);
+        const it = o.items[+el.dataset.i];
+        if (!it || it.flight) return;
+        // Un encargo antiguo (sin lista) que ya estaba en el almacén: se marcan todos antes de cambiar uno.
+        if (!o.items.some((x) => x.arrived || x.flight) && reached(o, 'almacen')) for (const x of o.items) x.arrived = o.dates.warehouse || today();
+        it.arrived = it.arrived ? '' : today();
+        syncOrderStatus(o);
+        await commit();
+        vibrate();
+        snackbar(o.status === 'almacen' ? 'Todo el encargo está en el almacén' : `${arrivedCount(o)} de ${o.items.length} productos en el almacén`);
+      },
+      trip: (el) => flightDetail(el.dataset.f),
       pay: () => paymentEditor(id),
       payment: (el) => paymentEditor(id, el.dataset.pid),
       refund: () => refundEditor(id),
@@ -381,21 +443,125 @@ function timeline(o, e) {
     let right = '';
     if (isDone) {
       sub = fmtDateLong(date);
+      if (s === 'enviado' && tripsOf(o).length) sub += ` · ${tripsOf(o).map(tripName).join(', ')}`;
       if (prevDate && ['almacen', 'cuba'].includes(s)) {
         const from = s === 'almacen' ? d.bought : d.warehouse;
         if (from) right = `<small>${daysBetween(from, date)} días ${s === 'almacen' ? 'desde la compra' : 'desde el almacén'}</small>`;
       }
       prevDate = date;
     } else if (o.status !== 'cancelado') {
-      if (s === 'almacen') sub = `Previsto: ${fmtDateLong(e.warehouse)}${e.whAuto ? ' (aprox.)' : ''}`;
+      if (s === 'almacen') sub = `${arrivedCount(o) ? `${arrivedCount(o)} de ${o.items.length} productos ya llegaron · ` : ''}Previsto: ${fmtDateLong(e.warehouse)}${e.whAuto ? ' (aprox.)' : ''}`;
+      if (s === 'enviado' && e.departure) sub = `Sale ${departureLabel(e.departure)}`;
       if (s === 'cuba') sub = `Previsto: ${fmtDateLong(e.cuba)}${e.cubaAuto ? ' (aprox.)' : ''}`;
       if (s === 'almacen' && o.status === 'comprado' && e.warehouse < today()) right = '<small class="red-t">atrasado</small>';
       if (s === 'cuba' && o.status === 'enviado' && e.cuba < today()) right = '<small class="red-t">atrasado</small>';
     }
-    rows.push(li({ act: isDone || (o.status === 'comprado' && s === 'almacen') ? 'step' : '', attrs: `data-s="${s}"`, ic: s === 'enviado' ? METHODS[methodOf(o)].ic : STATUS_ICON[s], color: isDone ? STATUS_COLOR[s] : 'gray', title: s === 'enviado' ? `${label} (${methodLabel(methodOf(o)).toLowerCase()})` : label, sub, right, cls: `tl ${isDone ? 'done' : 'todo'}`, chev: false }));
+    rows.push(li({ act: isDone || (o.status === 'comprado' && s === 'almacen' && !arrivedCount(o)) ? 'step' : '', attrs: `data-s="${s}"`, ic: s === 'enviado' ? METHODS[methodOf(o)].ic : STATUS_ICON[s], color: isDone ? STATUS_COLOR[s] : 'gray', title: s === 'enviado' ? `${label} (${methodLabel(methodOf(o)).toLowerCase()})` : label, sub, right, cls: `tl ${isDone ? 'done' : 'todo'}`, chev: false }));
   }
   if (d.bought && d.cuba) rows.push(`<div class="li tl-total"><span class="grow">Tiempo total hasta Cuba</span><b>${daysBetween(d.bought, d.cuba)} días</b></div>`);
   return rows.join('');
+}
+
+/** ¿Se pueden marcar los productos al llegar al almacén? */
+const checkable = (o) => ['comprado', 'almacen'].includes(o.status) && !legacyShipped(o);
+
+function itemRows(o) {
+  const w = itemLbs(o);
+  const showW = hasItemWeights(o);
+  return o.items.map((it, i) => {
+    const f = it.flight ? flight(it.flight) : null;
+    const arrived = itemArrived(o, it);
+    const info = [
+      `${usd(it.price)}${num(it.qty) > 1 ? ' c/u' : ''}`,
+      showW && w[i] ? lbs(w[i]) : '',
+      f ? `<a data-act="trip" data-f="${f.id}" class="link-t">${esc(tripName(f))}</a>${f.arrived ? ' · en Cuba' : ''}` : arrived && it.arrived ? `en el almacén desde ${fmtDate(it.arrived)}` : arrived ? 'en el almacén' : '',
+      it.url ? `<a href="${esc(it.url)}" target="_blank" rel="noopener">ver enlace</a>` : '',
+    ].filter(Boolean).join(' · ');
+    const title = `${num(it.qty) > 1 ? `${num(it.qty)} × ` : ''}${esc(it.desc || 'Producto')}`;
+    if (!checkable(o)) return li({ title, sub: info, right: usd(num(it.qty) * num(it.price)) });
+    return `<button class="li check-li item-li ${arrived ? 'on' : ''}" data-act="arrive" data-i="${i}" ${it.flight ? 'disabled' : ''}>
+      <span class="cbox"><input type="checkbox" tabindex="-1" ${arrived ? 'checked' : ''}><span>${icon('check')}</span></span>
+      <span class="grow"><span class="t">${title}</span><span class="s">${info}</span></span><span class="r">${usd(num(it.qty) * num(it.price))}</span></button>`;
+  }).join('');
+}
+
+/** El botón grande de la ficha: el siguiente paso del encargo. */
+async function advance(id, to) {
+  const o = order(id);
+  if (to === 'almacen') return arrivalPage(id);
+  if (to === 'enviado') {
+    const m = methodOf(o);
+    const open = openTrips(m).slice(0, 3);
+    if (!open.length) return flightEditor(null, { method: m });
+    const a = await menuSheet({
+      title: `¿En qué ${METHODS[m].trip.toLowerCase()} sale?`,
+      actions: [
+        ...open.map((f) => ({ label: `Añadir al ${tripName(f)}`, sub: `Sale ${departureLabel(f.date)}`, ic: METHODS[m].ic, value: () => flightEditor(f.id, { add: id }) })),
+        { label: `Nuevo ${METHODS[m].trip.toLowerCase()} con lo que hay en el almacén`, ic: 'plus', value: () => flightEditor(null, { method: m }) },
+      ],
+    });
+    return a?.();
+  }
+  if (to === 'cuba') {
+    const t = tripsOf(o).filter((f) => !f.arrived);
+    if (!t.length) return statusPage(id, 'cuba');
+    for (const f of t) await arriveFlight(f.id);
+    return;
+  }
+  statusPage(id, to);
+}
+
+/** «Llegó al almacén»: marcar qué productos llegaron (el peso es opcional y puede ponerse después). */
+function arrivalPage(id) {
+  const o = order(id);
+  const d = { date: today(), sel: {}, w: {} };
+  o.items.forEach((it, i) => {
+    d.sel[i] = !itemArrived(o, it);
+    d.w[i] = it.w ?? '';
+  });
+  openPage({
+    title: 'Llegó al almacén',
+    data: d,
+    action: { label: 'Guardar', act: 'save' },
+    render: () => `
+      <div class="form">
+        <div class="card"><b>${esc(clientLabel(o.client))}</b><div class="dim">${esc(orderTitle(o))}</div></div>
+        ${tf('Fecha de llegada', `<input class="inp" type="date" data-bind="date" value="${d.date}">`)}
+      </div>
+      ${secTitle('¿Qué llegó?')}
+      <div class="list">${o.items.map((it, i) => {
+        const already = itemArrived(o, it);
+        return `<div class="li check-li arrive-li">
+          <label class="cbox"><input type="checkbox" data-bind="sel.${i}" ${already || d.sel[i] ? 'checked' : ''} ${already ? 'disabled' : ''}><span>${icon('check')}</span></label>
+          <span class="grow"><span class="t">${num(it.qty) > 1 ? `${num(it.qty)} × ` : ''}${esc(it.desc || 'Producto')}</span><span class="s">${already ? `Ya estaba${it.arrived ? ` desde ${fmtDate(it.arrived)}` : ''}` : usd(it.price)}</span></span>
+          <label class="mini-w"><input class="inp" data-bind="w.${i}" inputmode="decimal" value="${esc(d.w[i])}" placeholder="peso"><span>lb</span></label>
+        </div>`;
+      }).join('')}</div>
+      <p class="hint">El peso no hace falta ahora: lo que paga el cliente se calcula con él, pero el envío real se cuenta con el peso y el precio total del vuelo.</p>`,
+    acts: {
+      save: async (el, ev, pg) => {
+        const cur = order(id);
+        let n = 0;
+        cur.items.forEach((it, i) => {
+          if (d.sel[i] && !itemArrived(cur, it)) {
+            it.arrived = d.date;
+            n++;
+          }
+          if (d.w[i] !== '' && d.w[i] != null) it.w = round2(num(d.w[i]));
+        });
+        if (!cur.items.some((x) => x.arrived || x.flight) && !n) return pg.close();
+        if (hasItemWeights(cur)) {
+          cur.weightLb = orderLbs(cur);
+          cur.weightReal = true;
+        }
+        syncOrderStatus(cur);
+        await commit();
+        vibrate(25);
+        pg.close();
+        snackbar(cur.status === 'almacen' ? 'Todo el encargo está en el almacén' : `${arrivedCount(cur)} de ${cur.items.length} productos en el almacén`);
+      },
+    },
+  });
 }
 
 async function editStepDate(id, s) {
@@ -412,6 +578,7 @@ async function editStepDate(id, s) {
   if (done) {
     if (!v) return;
     o.dates[key] = v;
+    if (s === 'almacen') for (const it of o.items) if (it.arrived) it.arrived = v;
   } else o.etaWarehouse = v || '';
   await commit();
 }
@@ -480,56 +647,9 @@ export function statusPage(id, to) {
   });
 }
 
-/** Marcar varios encargos del almacén como enviados a Cuba a la vez (una misma caja o envío). */
-export function bulkShipPage() {
-  const all = state.orders.filter((o) => o.status === 'almacen');
-  const count = (m) => all.filter((o) => methodOf(o) === m).length;
-  // Aéreo y marítimo salen por separado: se empieza por el método con más encargos esperando.
-  const first = Object.keys(METHODS).sort((a, b) => count(b) - count(a))[0];
-  const d = { method: first, date: today(), sel: Object.fromEntries(all.map((o) => [o.id, true])), eta: '' };
-  const list = () => all.filter((o) => methodOf(o) === d.method);
-  openPage({
-    title: 'Enviar a Cuba',
-    data: d,
-    action: { label: 'Enviar', act: 'save' },
-    render: () => {
-      const l = list();
-      const chosen = l.filter((o) => d.sel[o.id]);
-      const w = round2(chosen.reduce((a, o) => a + orderCalc(o).lb, 0));
-      const cost = round2(chosen.reduce((a, o) => a + orderCalc(o).shipCost, 0));
-      return `
-      <div class="form">
-        <div class="lbl">Método de envío</div>
-        ${seg('method', Object.entries(METHODS).map(([m, x]) => [m, `${x.label} (${count(m)})`]), d.method)}
-        ${tf('Fecha de envío', `<input class="inp" type="date" data-bind="date" value="${d.date}">`)}
-        ${tf('Llegada prevista a Cuba (opcional)', `<input class="inp" type="date" data-bind="eta" value="${d.eta}">`, { help: `Si la dejas vacía: unos ${cubaDays(d.method)} días (${methodLabel(d.method).toLowerCase()}), ${fmtDate(addDays(d.date, cubaDays(d.method)))}.` })}
-      </div>
-      ${secTitle(`En el almacén · ${methodLabel(d.method).toLowerCase()}`)}
-      <div class="list">${l.length ? l.map((o) => `<label class="li check-li"><span class="cbox"><input type="checkbox" data-bind="sel.${o.id}" ${d.sel[o.id] ? 'checked' : ''}><span>${icon('check')}</span></span>
-        <span class="grow"><span class="t">${esc(clientLabel(o.client))}</span><span class="s">${esc(orderTitle(o))} · ${o.weightLb === '' ? 'sin peso' : lbs(o.weightLb)}</span></span><span class="r">${usd(orderCalc(o).shipCost)}</span></label>`).join('') : `<div class="empty-li">No hay encargos ${methodLabel(d.method).toLowerCase()}s en el almacén</div>`}</div>
-      <div class="card" data-sum>${kv('Encargos', chosen.length)}${kv('Peso total', lbs(w))}${kv('Costo del envío', usd(cost), 'strong')}</div>`;
-    },
-    afterBind: (pg, key) => (key.startsWith('sel.') || key === 'date') && pg.render(),
-    acts: {
-      seg: (el, ev, pg) => {
-        d.method = el.dataset.v;
-        pg.render();
-      },
-      save: async (el, ev, pg) => {
-        const ids = list().filter((o) => d.sel[o.id]).map((o) => o.id);
-        if (!ids.length) return snackbar('Marca al menos un encargo');
-        for (const id of ids) {
-          const o = order(id);
-          o.status = 'enviado';
-          o.dates.shipped = d.date;
-          if (d.eta) o.etaCuba = d.eta;
-        }
-        await commit();
-        pg.close();
-        snackbar(`${ids.length} encargo${ids.length === 1 ? '' : 's'} enviado${ids.length === 1 ? '' : 's'} por ${methodLabel(d.method).toLowerCase()}`);
-      },
-    },
-  });
+/** Enviar a Cuba lo que hay en el almacén: se anota como un vuelo (o barco) con su peso y precio total. */
+export function bulkShipPage(method = null) {
+  return flightEditor(null, method ? { method } : {});
 }
 
 /* ---------- cobros ---------- */
@@ -626,6 +746,7 @@ export function clientText(o) {
   const L = [`📦 *Tu encargo* — ${orderTitle(o)}`];
   L.push(`Envío: ${methodLabel(methodOf(o))}`);
   L.push(`Estado: ${STATUS_LABEL[o.status]}${o.dates[STATUS_DATE[o.status]] ? ` (${fmtDate(o.dates[STATUS_DATE[o.status]])})` : ''}`);
+  if (o.status === 'almacen' && e.departure) L.push(`Sale hacia Cuba ${departureLabel(e.departure)}`);
   if (o.status === 'comprado' || o.status === 'almacen' || o.status === 'enviado') L.push(`Llegada aproximada a Cuba: ${fmtDate(e.cuba)}`);
   L.push('');
   L.push(`💵 *Precio: ${usd(k.total)}*`);
