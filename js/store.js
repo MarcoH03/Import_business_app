@@ -2,7 +2,7 @@
 // Todo el dinero se lleva en USD, en dos cuentas: la tarjeta de EE. UU. y el efectivo en Cuba.
 // GitHub solo aloja el código: los datos viven en cada teléfono (y, si se activa, en la sincronización).
 
-export const APP_VERSION = '1.2.1';
+export const APP_VERSION = '1.2.2';
 const DB_NAME = 'import-business';
 const DB_STORE = 'kv';
 const LS_KEY = 'import-business-state';
@@ -379,37 +379,14 @@ function flightData() {
       }
     });
   }
-  for (const x of map.values()) {
-    const c = num(x.f.cost);
-    x.hasCost = c > 0;
-    // Lo pagado por el vuelo (con cajas y embalaje) se reparte entre las libras de los productos que lleva:
-    // costo por libra de producto = precio del vuelo ÷ libras de productos. Se reparte al centavo para que
-    // la suma de las partes sea exactamente lo pagado (los centavos sueltos van a los restos más grandes).
-    x.perLb = x.lbs > 0 ? c / x.lbs : 0;
-    x.alloc = new Map();
-    if (!x.hasCost || !x.items.length) continue;
-    const shares = x.items.map((i) => (x.lbs > 0 ? i.lb / x.lbs : 1 / x.items.length));
-    const total = Math.round(c * 100);
-    const raw = shares.map((sh) => total * sh);
-    const cents = raw.map(Math.floor);
-    let left = total - cents.reduce((a, b) => a + b, 0);
-    const order = raw.map((r, i) => [r - cents[i], i]).sort((a, b) => b[0] - a[0] || a[1] - b[1]);
-    for (let k = 0; left > 0; k = (k + 1) % order.length, left--) cents[order[k][1]]++;
-    x.items.forEach((i, n) => x.alloc.set(`${i.o.id}:${i.idx}`, cents[n] / 100));
-  }
+  for (const x of map.values()) x.hasCost = num(x.f.cost) > 0;
   cache = { gen, state, map };
   return map;
 }
-/** Parte del precio pagado por un vuelo que le toca a un producto, según sus libras (null si aún no se puso el precio). */
-function allocated(o, idx) {
-  const x = flightData().get(o.items[idx].flight);
-  if (!x || !x.hasCost) return null;
-  return x.alloc.get(`${o.id}:${idx}`) ?? null;
-}
-/** Costo por libra de producto de un vuelo (precio pagado ÷ libras de los productos que lleva), o null. */
-export function flightRate(id) {
-  const x = flightData().get(id);
-  return x && x.hasCost && x.lbs > 0 ? x.perLb : null;
+/** ¿Ese producto ya salió en un vuelo al que se le puso el precio pagado? */
+function flownPaid(it) {
+  const x = it.flight && flightData().get(it.flight);
+  return !!(x && x.hasCost);
 }
 
 /** Todos los importes de un encargo con sus precios guardados (cambiar los ajustes no altera encargos ya hechos). */
@@ -424,46 +401,28 @@ export function orderCalc(o) {
   const step = num(o.roundTotal);
   const auto = step > 0 ? round2(Math.ceil(round2(subtotal / step) - 1e-9) * step) : subtotal;
   const total = hasVal(o.priceOverride) ? round2(num(o.priceOverride)) : auto;
-  // Envío: lo que salió en un vuelo con precio usa su parte del precio real; lo demás, libras × costo estimado.
+  // Lo que nos cuesta el envío: las libras de cada producto × nuestra tarifa (la de Ajustes al hacer el encargo).
+  // El precio real de cada vuelo no se reparte entre los encargos: se compara en el vuelo (ver flightCalc).
   const lbsL = itemLbs(o);
-  const ratio = w > 0 ? lb / w : 1;
-  let shipAlloc = 0;
-  let shipEst = 0;
-  let flown = 0;
-  // Desglose del envío para mostrarlo: una parte por cada vuelo con precio y otra estimada para lo demás.
-  const parts = new Map();
-  o.items.forEach((it, i) => {
-    const a = it.flight ? allocated(o, i) : null;
-    const key = a === null ? '' : it.flight;
-    const p = parts.get(key) || { flight: key || null, lb: 0, amount: 0 };
-    if (a === null) {
-      const e = lbsL[i] * ratio * num(o.lbCost);
-      shipEst += e;
-      p.lb += lbsL[i] * ratio;
-      p.amount += e;
-    } else {
-      shipAlloc += a;
-      flown++;
-      p.lb += lbsL[i];
-      p.amount += a;
-    }
-    parts.set(key, p);
-  });
-  const shipParts = [...parts.values()].filter((p) => p.lb || p.amount).map((p) => ({
-    ...p, lb: round2(p.lb), amount: round2(p.amount), rate: p.flight ? flightRate(p.flight) : num(o.lbCost),
-  })).sort((a, b) => (a.flight ? 0 : 1) - (b.flight ? 0 : 1));
   const override = hasVal(o.shipCost);
-  const shipCost = override ? round2(num(o.shipCost)) : round2(shipAlloc + shipEst);
-  const shipReal = !override && flown > 0 && flown === o.items.length;
+  const shipLb = override ? 0 : round2(w);
+  const shipCost = override ? round2(num(o.shipCost)) : round2(w * num(o.lbCost));
+  const shipOf = (i) => (override ? (w > 0 ? shipCost * lbsL[i] / w : shipCost / (o.items.length || 1)) : lbsL[i] * num(o.lbCost));
+  let shipFlown = 0;
+  o.items.forEach((it, i) => {
+    if (flownPaid(it)) shipFlown += shipOf(i);
+  });
+  // Lo que aún no salió en un vuelo con precio (sirve para saber cuánto falta por pagar de envío).
+  const shipEst = round2(shipCost - shipFlown);
   const cost = round2(products + shipCost);
   const paid = round2(sum(o.payments || [], (p) => p.amount));
   const refund = round2(num(o.refund?.amount));
-  // Lo gastado de verdad hasta ahora: el producto si ya se compró y su parte de los vuelos que ya se pagaron.
-  const spent = round2((reached(o, 'comprado') ? products : 0) + (legacyShipped(o) ? shipCost : shipAlloc));
+  // Lo gastado hasta ahora: el producto si ya se compró y el envío de lo que ya salió (a nuestra tarifa).
+  const spent = round2((reached(o, 'comprado') ? products : 0) + (legacyShipped(o) ? shipCost : shipFlown));
   const profit = o.status === 'cancelado' ? round2(paid + refund - spent) : round2(total - cost);
   return {
-    products, lb: round2(lb), weight, fee, extras, subtotal, auto, total, shipCost, shipReal, shipAlloc: round2(shipAlloc), shipEst: round2(shipEst),
-    shipParts, shipFixed: override,
+    products, lb: round2(lb), weight, fee, extras, subtotal, auto, total,
+    shipCost, shipLb, shipEst, shipFlown: round2(shipFlown), shipFixed: override,
     cost, paid, refund, spent, profit,
     due: o.status === 'cancelado' ? 0 : round2(total - paid),
     units: sum(o.items, (it) => num(it.qty || 1)),
@@ -482,42 +441,45 @@ export function itemShares(o) {
   const byPrice = (i) => (prodTot > 0 ? prices[i] / prodTot : 1 / n);
   const base = o.items.map((_, i) => prices[i] + k.weight * byLb(i) + k.fee * byPrice(i));
   const rest = k.total - base.reduce((a, b) => a + b, 0);
-  const ratio = orderLbs(o) > 0 ? k.lb / orderLbs(o) : 1;
   return o.items.map((it, i) => {
-    let ship;
-    if (hasVal(o.shipCost)) ship = num(o.shipCost) * byLb(i);
-    else {
-      const a = it.flight ? allocated(o, i) : null;
-      ship = a === null ? lbsL[i] * ratio * num(o.lbCost) : a;
-    }
+    const ship = hasVal(o.shipCost) ? num(o.shipCost) * byLb(i) : lbsL[i] * num(o.lbCost);
     const revenue = base[i] + rest * byPrice(i);
     return { revenue: round2(revenue), product: round2(prices[i]), ship: round2(ship), weightCharge: round2(k.weight * byLb(i)), profit: round2(revenue - prices[i] - ship) };
   });
 }
 
-/** Cuentas de un vuelo: qué lleva, lo que se cobra por él, lo que costó y la ganancia de esa vuelta. */
+/**
+ * Cuentas de un vuelo.
+ * - Libras: las registradas de los productos, lo cobrado por ellas y lo que de verdad se pagó por el vuelo.
+ * - Ganancia de la vuelta: lo cobrado a todos los clientes (peso y precio acordado incluidos)
+ *   − el precio de los productos − lo pagado por el vuelo.
+ * Cada encargo cuenta su envío a nuestra tarifa; la diferencia entre eso y lo pagado (diff) es del vuelo.
+ */
 export function flightCalc(f) {
   const x = flightData().get(f.id) || { items: [], lbs: 0, hasCost: false };
   const items = x.items.map(({ o, idx, lb }) => ({ o, idx, it: o.items[idx], lb, ...itemShares(o)[idx], delivered: o.status === 'entregado' }));
   const orders = [...new Set(items.map((i) => i.o))];
   const revenue = round2(sum(items, (i) => i.revenue));
   const products = round2(sum(items, (i) => i.product));
-  const estimated = round2(sum(items, (i) => i.lb * num(i.o.lbCost)));
+  const estimated = round2(sum(items, (i) => i.ship));
   const cost = x.hasCost ? round2(num(f.cost)) : estimated;
+  const weightCharge = round2(sum(items, (i) => i.weightCharge));
+  const diff = x.hasCost ? round2(estimated - cost) : 0;
   const done = items.filter((i) => i.delivered);
   const doneOrders = orders.filter((o) => o.status === 'entregado');
+  const lbCosts = [...new Set(items.filter((i) => !hasVal(i.o.shipCost)).map((i) => num(i.o.lbCost)))];
   return {
     items, orders, doneOrders,
     lbs: round2(x.lbs), weight: num(f.weight), extraLb: num(f.weight) ? round2(num(f.weight) - x.lbs) : null,
-    hasCost: x.hasCost, cost, estimated,
-    // Costo por libra de producto (lo que paga cada libra de los encargos, cajas incluidas) y por libra real del vuelo.
-    perLb: x.hasCost && x.lbs > 0 ? num(f.cost) / x.lbs : null,
-    perRealLb: x.hasCost && num(f.weight) ? num(f.cost) / num(f.weight) : null,
+    hasCost: x.hasCost, cost, estimated, diff,
     lbPrices: [...new Set(items.map((i) => num(i.o.lbPrice)))],
-    revenue, products, weightCharge: round2(sum(items, (i) => i.weightCharge)),
+    lbCosts,
+    revenue, products, weightCharge,
+    lbProfit: round2(weightCharge - cost),
     profit: round2(revenue - products - cost),
     doneRevenue: round2(sum(done, (i) => i.revenue)),
-    doneProfit: round2(sum(done, (i) => i.profit)),
+    // Ya hecha: la ganancia de los entregados (a nuestra tarifa) más la diferencia del vuelo, que cuenta al pagarlo.
+    doneProfit: round2(sum(done, (i) => i.profit) + diff),
     collected: round2(sum(orders, (o) => Math.min(orderCalc(o).paid, orderCalc(o).total))),
   };
 }
@@ -885,7 +847,7 @@ export function stats(from, to) {
   const inR = (d) => !!d && d >= from && d <= to;
   const delivered = state.orders.filter((o) => o.status === 'entregado' && inR(o.dates.delivered));
   const cancelled = state.orders.filter((o) => o.status === 'cancelado' && inR(o.dates.cancelled));
-  const E = { count: delivered.length, revenue: 0, products: 0, shipCost: 0, weight: 0, fee: 0, extras: 0, profit: 0, lb: 0, cancelled: cancelled.length, cancelLoss: 0 };
+  const E = { count: delivered.length, revenue: 0, products: 0, shipCost: 0, shipLb: 0, flightDiff: 0, weight: 0, fee: 0, extras: 0, profit: 0, lb: 0, cancelled: cancelled.length, cancelLoss: 0 };
   const byMethod = Object.fromEntries(Object.keys(METHODS).map((m) => [m, { count: 0, lb: 0, weight: 0, shipCost: 0, profit: 0 }]));
   for (const o of delivered) {
     const k = orderCalc(o);
@@ -898,6 +860,7 @@ export function stats(from, to) {
     E.revenue += k.total;
     E.products += k.products;
     E.shipCost += k.shipCost;
+    E.shipLb += k.shipLb;
     E.weight += k.weight;
     E.fee += k.fee;
     E.extras += k.total - k.products - k.weight - k.fee;
@@ -909,6 +872,10 @@ export function stats(from, to) {
     E.cancelLoss += k.profit;
     E.profit += k.profit;
   }
+  // Diferencia entre el envío a nuestra tarifa y lo que de verdad se pagó por cada vuelo (cuenta el día del vuelo).
+  E.flightDiff = 0;
+  for (const f of state.flights) if (inR(f.date) && num(f.cost) > 0) E.flightDiff += flightCalc(f).diff;
+  E.profit += E.flightDiff;
   const remits = activeRemits().filter((r) => inR(remitCalc(r).doneDate));
   const R = { count: remits.length, volume: 0, received: 0, commission: 0, cost: 0, profit: 0 };
   for (const r of remits) {

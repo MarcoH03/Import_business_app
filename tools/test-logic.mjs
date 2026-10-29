@@ -12,7 +12,7 @@ let k = S.orderCalc(o);
 assert.equal(k.products, 50); assert.equal(k.weight, 14.4); assert.equal(k.fee, 0); assert.equal(k.total, 64.4); assert.equal(k.shipCost, 8); assert.equal(k.profit, 6.4);
 o.feeOn = true; o.feePct = 10; o.roundLb = true; o.roundTotal = 1;
 k = S.orderCalc(o);
-assert.equal(k.lb, 4); assert.equal(k.weight, 18); assert.equal(k.fee, 5); assert.equal(k.total, 73); assert.equal(k.shipCost, 10);
+assert.equal(k.lb, 4); assert.equal(k.weight, 18); assert.equal(k.fee, 5); assert.equal(k.total, 73); assert.equal(k.shipCost, 8, 'nuestro costo va con las libras reales');
 ok('precio del encargo');
 // Remesa
 assert.equal(S.remitReceive(100, 1), 101);
@@ -36,7 +36,7 @@ ok('envío aéreo y marítimo');
   o1.items[1].arrived = '2026-10-26'; S.syncOrderStatus(o1); assert.equal(o1.status, 'almacen');
   assert.equal(S.nextDeparture('aereo', '2026-10-26'), '2026-10-29');
   assert.equal(S.readyItems('aereo').length, 2);
-  // Otro encargo de 5 lb en el mismo vuelo. El vuelo pesó 10 lb reales (cajas) y costó 30 USD: 3.75 USD por lb declarada.
+  // Otro encargo de 5 lb en el mismo vuelo. El vuelo pesó 10 lb reales (cajas) y costó 30 USD (a la tarifa serían 20).
   const o2 = S.newOrder({ id: 'f2', method: 'aereo', weightLb: 5, items: [{ desc: 'C', qty: 1, price: 50 }] });
   o2.items[0].arrived = '2026-10-27'; S.syncOrderStatus(o2);
   st.orders.push(o2);
@@ -45,19 +45,22 @@ ok('envío aéreo y marítimo');
   for (const o of [o1, o2]) { for (const it of o.items) it.flight = 'v1'; S.syncOrderStatus(o); }
   S.invalidate();
   assert.equal(o1.status, 'enviado'); assert.equal(o1.dates.shipped, '2026-10-29');
-  assert.equal(S.orderCalc(o1).shipCost, 11.25); assert.equal(S.orderCalc(o2).shipCost, 18.75); assert.ok(S.orderCalc(o1).shipReal);
+  // Cada encargo cuenta su envío a nuestra tarifa (2.50/lb), no una parte del precio del vuelo.
+  assert.equal(S.orderCalc(o1).shipCost, 7.5); assert.equal(S.orderCalc(o2).shipCost, 12.5); assert.equal(S.orderCalc(o1).shipEst, 0);
   assert.equal(S.orderEta(o1).cuba, '2026-10-31');
   const fc = S.flightCalc(fl);
   assert.equal(fc.lbs, 8); assert.equal(fc.extraLb, 2); assert.equal(fc.cost, 30);
   assert.equal(fc.revenue, S.orderCalc(o1).total + S.orderCalc(o2).total);
-  assert.equal(fc.profit, round2(fc.revenue - 90 - 30)); assert.equal(fc.doneProfit, 0);
+  assert.equal(fc.estimated, 20); assert.equal(fc.diff, -10);
+  assert.equal(fc.profit, round2(fc.revenue - 90 - 30)); assert.equal(fc.doneProfit, -10, 'lo pagado de más cuenta al salir el vuelo');
+  assert.equal(S.stats('2026-10-01', '2026-10-31').E.flightDiff, -10);
   // Solo el vuelo descuenta el envío de la tarjeta (los productos ya se descontaron al comprarlos).
   const card = S.moneyEntries('tarjeta').filter((e) => e.kind === 'flight');
   assert.equal(card.length, 1); assert.equal(card[0].amount, -30);
   assert.ok(!S.moneyEntries('tarjeta').some((e) => e.label === 'Envío a Cuba'));
   // Entregar o1: la ganancia de la vuelta va subiendo con lo entregado
   o1.status = 'entregado'; o1.dates.delivered = '2026-11-01'; S.invalidate();
-  assert.equal(S.flightCalc(fl).doneProfit, S.orderCalc(o1).profit);
+  assert.equal(S.flightCalc(fl).doneProfit, round2(S.orderCalc(o1).profit - 10));
   // Llega el vuelo: el otro encargo pasa a «en Cuba»
   fl.arrived = '2026-10-31'; S.syncOrderStatus(o2); assert.equal(o2.status, 'cuba'); assert.equal(o2.dates.cuba, '2026-10-31');
   // Aportes de un inversionista
@@ -68,7 +71,7 @@ ok('envío aéreo y marítimo');
   assert.equal(stt.income.tarjeta, 0, 'un aporte no es un ingreso');
   st.orders.length = 0; st.flights.length = 0; st.workers.length = 0; st.capital.length = 0; S.invalidate();
 }
-ok('productos, vuelos de los jueves, costo real repartido y aportes');
+ok('productos, vuelos de los jueves, envío a nuestra tarifa y aportes');
 // Reparto exacto: vuelo de 15.60 USD con 4.9 lb de productos (6.5 lb reales con cajas)
 {
   const st = S.state;
@@ -80,20 +83,22 @@ ok('productos, vuelos de los jueves, costo real repartido y aportes');
   const fl = { id: 'v9', n: 9, method: 'aereo', date: '2026-10-29', weight: 6.5, cost: 15.6, paidFrom: 'tarjeta' };
   st.flights.push(fl); S.invalidate();
   const fc = S.flightCalc(fl);
-  assert.equal(round2(fc.perLb), 3.18); assert.equal(round2(fc.perRealLb), 2.4);
+  // Libras del vuelo: registradas, cobradas y lo que de verdad se pagó.
+  assert.equal(fc.lbs, 4.9); assert.equal(fc.weightCharge, 24.5); assert.equal(fc.cost, 15.6); assert.equal(fc.lbProfit, 8.9);
+  assert.equal(fc.estimated, 12.25); assert.equal(fc.diff, -3.35);
+  // Ganancia total: lo cobrado a todos (con peso y precio acordado) − productos − lo pagado por el vuelo.
+  assert.equal(fc.revenue, 222.26); assert.equal(fc.products, 186.76); assert.equal(fc.profit, 19.9);
   const shares = [a, b, c].flatMap((o) => S.itemShares(o).filter((_, i) => o.items[i].flight));
-  assert.equal(round2(shares.reduce((x, y) => x + y.ship, 0)), 15.6, 'lo repartido suma justo lo pagado');
-  assert.equal(round2(shares.reduce((x, y) => x + y.profit, 0)), fc.profit, 'las ganancias de los encargos suman la del vuelo');
+  assert.equal(round2(shares.reduce((x, y) => x + y.profit, 0) + fc.diff), fc.profit, 'ganancia de los encargos + diferencia del vuelo = ganancia del vuelo');
+  // Tablet: 109.99 + 2.1 lb × 2.50 = 115.24 de costo; se cobró 131.49.
   const ka = S.orderCalc(a);
-  assert.equal(ka.shipParts.length, 1); assert.equal(ka.shipParts[0].lb, 2.1); assert.ok(Math.abs(ka.shipParts[0].amount - 2.1 * fc.perLb) < 0.011);
-  assert.equal(ka.profit, round2(ka.total - ka.products - ka.shipCost));
-  // Encargo que salió en parte: una parte real del vuelo y otra estimada
+  assert.equal(ka.total, 131.49); assert.equal(ka.shipCost, 5.25); assert.equal(ka.cost, 115.24); assert.equal(ka.profit, 16.25);
+  // Encargo que salió en parte: el envío va igual a la tarifa; lo que no salió queda por pagar.
   const kc = S.orderCalc(c);
-  assert.equal(kc.shipParts.length, 2); assert.equal(kc.shipParts[1].flight, null); assert.equal(kc.shipParts[1].amount, 2.75);
-  assert.equal(fc.weightCharge, 24.5); assert.equal(fc.lbs, 4.9);
+  assert.equal(kc.shipCost, 6.25); assert.equal(kc.shipEst, 2.75);
   st.orders.length = 0; st.flights.length = 0; S.invalidate();
 }
-ok('reparto exacto del precio del vuelo y desglose del costo');
+ok('vuelo #9: libras cobradas, pagado y ganancia');
 // Lectura de fechas de llegada
 const ref = '2026-10-07';
 assert.equal(S.parseArrival('Arriving Tuesday, October 14', ref), '2026-10-14');

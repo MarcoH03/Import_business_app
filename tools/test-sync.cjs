@@ -99,7 +99,7 @@ const URL = 'http://localhost:8080/?ui=android';
     await (await import('/js/sync.js')).syncNow();
   });
   await run(B, async () => (await import('/js/sync.js')).syncNow());
-  const fb = await run(B, async () => { const S = await import('/js/store.js'); S.invalidate(); return { st: S.order('o1').status, ship: S.orderCalc(S.order('o1')).shipCost, owed: S.personCapital('p1').owed, card: S.balance('tarjeta') }; });
+  const fb = await run(B, async () => { const S = await import('/js/store.js'); S.invalidate(); return { st: S.order('o1').status, ship: S.flightCalc(S.flight('v1')).cost, owed: S.personCapital('p1').owed, card: S.balance('tarjeta') }; });
   const fa = await run(A, async () => { const S = await import('/js/store.js'); return { card: S.balance('tarjeta') }; });
   assert.deepEqual([fb.st, fb.ship, fb.owed], ['enviado', 12, 300]);
   assert.equal(fb.card, fa.card);
