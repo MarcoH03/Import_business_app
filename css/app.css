@@ -162,6 +162,7 @@ button.card { width: calc(100% - 32px); }
 .kv.red b, .kv.red span { color: var(--error); }
 .kv.amber b { color: var(--warn); }
 .kv.dim b { color: var(--on-surface-variant); font-weight: 400; }
+.kv-label { margin: 10px 0 2px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--on-surface-variant); }
 
 /* listas */
 .list { margin: 0 16px; border-radius: var(--radius); background: var(--surface-low); overflow: hidden; }

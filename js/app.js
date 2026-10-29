@@ -356,7 +356,8 @@ function viewInformes() {
     <div class="card">
       ${kv(`Cobrado por ${plural(E.count, 'encargo entregado', 'encargos entregados')}`, usd(E.revenue))}
       ${kv('− Precio de los productos', usd(E.products))}
-      ${kv(`− Envío a Cuba (${lbs(E.lb)})`, usd(E.shipCost))}
+      ${kv(`− Envío a nuestra tarifa (${lbs(E.shipLb)})`, usd(E.shipCost))}
+      ${E.flightDiff ? kv(E.flightDiff > 0 ? '+ Vuelos: pagaste menos que la tarifa' : '− Vuelos: pagaste más que la tarifa', usd(Math.abs(E.flightDiff)), E.flightDiff < 0 ? 'red' : '') : ''}
       ${E.cancelled ? kv(`${plural(E.cancelled, 'cancelado', 'cancelados')}`, usd(E.cancelLoss), E.cancelLoss < 0 ? 'red' : '') : ''}
       ${kv('= Ganancia de los encargos', usd(E.profit), 'strong')}
       ${kv('   de ella: libras / % / otros cargos', `${usd(round2(E.weight - E.shipCost))} / ${usd(E.fee)} / ${usd(E.extras)}`, 'dim')}

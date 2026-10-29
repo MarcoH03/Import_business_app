@@ -85,27 +85,17 @@ function priceRows(o) {
     ${extraSum ? kv(o.priceOverride !== '' && o.priceOverride != null ? 'Ajuste al precio acordado' : 'Redondeo', usd(extraSum)) : ''}
     <div class="divider"></div>
     ${kv('Precio al cliente', usd(k.total), 'big')}
-    ${kv('− Productos (lo que pagaste)', usd(k.products))}
-    ${costRows(o, k)}
+    ${secLabel('Lo que nos costó')}
+    ${kv('Costo de los productos', usd(k.products))}
+    ${k.shipFixed
+    ? kv('Envío (costo fijo escrito a mano)', usd(k.shipCost))
+    : kv(`Envío: ${lbs(k.shipLb)} × ${usd(o.lbCost)}/lb (nuestra tarifa ${methodLabel(methodOf(o)).toLowerCase()})`, usd(k.shipCost))}
+    ${kv('= Costo del encargo', usd(k.cost), 'strong')}
     <div class="divider"></div>
-    ${kv('= Ganancia', usd(k.profit), k.profit < 0 ? 'red strong' : 'green strong')}`;
+    ${kv(`Ganancia: ${usd(k.total)} − ${usd(k.cost)}`, usd(k.profit), k.profit < 0 ? 'red strong' : 'green strong')}`;
 }
 
-/**
- * Lo que nos cuesta el envío, con la cuenta a la vista: lo que ya salió en un vuelo con precio paga
- * «libras × costo por libra del vuelo» (precio del vuelo ÷ libras de los productos que lleva, cajas incluidas);
- * lo demás, «libras × costo estimado por libra».
- */
-function costRows(o, k) {
-  if (k.shipFixed) return kv('− Envío (costo fijo escrito a mano)', usd(k.shipCost));
-  if (!k.shipParts.length) return kv('− Envío', usd(0));
-  return k.shipParts.map((p) => {
-    const f = p.flight ? flight(p.flight) : null;
-    return f
-      ? kv(`− Envío real (${esc(tripName(f))}): ${lbs(p.lb)} × ${usd(p.rate)}/lb`, usd(p.amount))
-      : kv(`− Envío estimado: ${lbs(p.lb)} × ${usd(p.rate)}/lb`, usd(p.amount), 'dim');
-  }).join('');
-}
+const secLabel = (t) => `<div class="kv-label">${t}</div>`;
 
 /* ======================= formulario ======================= */
 export function orderEditor(id = null, prefill = {}) {
@@ -178,7 +168,7 @@ export function orderEditor(id = null, prefill = {}) {
           <div class="form inner">
             ${tf('Precio acordado (opcional)', numInp('priceOverride', d.priceOverride, `placeholder="${orderCalc({ ...d, priceOverride: '' }).total}"`), { suffix: 'USD', help: 'Si le cobras un precio cerrado, escríbelo aquí y se usa en lugar del calculado.' })}
             ${tf('Nos cuesta la libra', numInp('lbCost', d.lbCost), { suffix: 'USD' })}
-            ${tf('Costo de envío fijo (opcional)', numInp('shipCost', d.shipCost, `placeholder="${round2(orderCalc({ ...d, shipCost: '' }).shipCost)}"`), { suffix: 'USD', help: 'Normalmente déjalo vacío: mientras no sale, se estima con las libras; cuando sale, se usa su parte del precio real del vuelo.' })}
+            ${tf('Costo de envío fijo (opcional)', numInp('shipCost', d.shipCost, `placeholder="${round2(orderCalc({ ...d, shipCost: '' }).shipCost)}"`), { suffix: 'USD', help: 'Normalmente déjalo vacío: el envío se calcula con las libras × lo que nos cuesta la libra.' })}
           </div>
         </details>
 
@@ -621,7 +611,7 @@ export function statusPage(id, to) {
           <div class="card" data-sum>${priceRows(tmp)}</div>
           <p class="hint">Tardó ${daysBetween(o.dates.bought || o.dates.created, d.date)} días desde la compra.</p>` : ''}
         ${to === 'enviado' ? `${o.weightLb === '' ? tf('Peso', numInp('weight', d.weight, 'placeholder="0.0"'), { suffix: 'lb' }) : ''}
-          <div class="card">${kv('Método', methodLabel(methodOf(o)))}${kv(`Costo del envío (${lbs(k.lb)} × ${usd(o.lbCost)})`, usd(k.shipCost))}${kv('Se paga con', ACC_SHORT[o.shipFrom])}</div>
+          <div class="card">${kv('Método', methodLabel(methodOf(o)))}${kv(`Costo del envío (${lbs(k.shipLb)} × ${usd(o.lbCost)})`, usd(k.shipCost))}${kv('Se paga con', ACC_SHORT[o.shipFrom])}</div>
           ${tf('Llegada prevista a Cuba (opcional)', `<input class="inp" type="date" data-bind="eta" value="${d.eta}">`, { help: `Si la dejas vacía: unos ${cubaDays(methodOf(o))} días (${methodLabel(methodOf(o)).toLowerCase()}), ${fmtDate(addDays(d.date, cubaDays(methodOf(o))))}.` })}` : ''}
         ${to === 'cuba' && o.dates.shipped ? `<p class="hint">Tardó ${daysBetween(o.dates.shipped, d.date)} días desde que salió del almacén.</p>` : ''}
         ${to === 'entregado' ? `

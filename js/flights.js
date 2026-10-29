@@ -100,30 +100,30 @@ export function flightEditor(id = null, opts = {}) {
         : `<div class="empty-li">No hay productos ${methodLabel(d.method).toLowerCase()}s marcados como llegados al almacén.</div>`}</div>
       <div class="card" data-sum>
         ${kv('Encargos', nOrders)}
-        ${kv('Peso de los productos', lbs(declared))}
+        ${kv('Libras registradas de los productos', lbs(declared))}
         ${kv('Se cobra a los clientes por esas libras', usd(charged))}
-        ${kv('Costo estimado (libras × costo por libra)', usd(est), 'dim')}
+        ${kv('A nuestra tarifa (libras × lo que nos cuesta la libra)', usd(est), 'dim')}
       </div>
-      ${chosen.some((x) => !x.lb) ? `<div class="banner amber">${icon('warning')}<span>${chosen.filter((x) => !x.lb).length} producto(s) sin peso: no pagan parte del envío ni se les cobran libras. Pon su peso en el encargo.</span></div>` : ''}
+      ${chosen.some((x) => !x.lb) ? `<div class="banner amber">${icon('warning')}<span>${chosen.filter((x) => !x.lb).length} producto(s) sin peso: no se les cobran libras ni cuentan envío. Pon su peso en el encargo.</span></div>` : ''}
       ${secTitle('Peso y precio reales del envío')}
       <div class="form">
         <div class="row2">
           ${tf('Peso total real', numInp('weight', d.weight, 'placeholder="0.0"'), { suffix: 'lb' })}
           ${tf('Pagaste por todo', numInp('cost', d.cost, 'placeholder="0.00"'), { suffix: 'USD' })}
         </div>
-        <div class="tf-help" data-real>${realHelp(d, declared, charged)}</div>
+        <div class="tf-help" data-real>${realHelp(d, declared, charged, est)}</div>
         <div class="lbl">Se pagó con</div>
         ${seg('paidFrom', Object.entries(ACCOUNTS), d.paidFrom)}
         ${tf('Llegada prevista a Cuba (opcional)', `<input class="inp" type="date" data-bind="eta" value="${d.eta}">`, { help: `Si la dejas vacía: ${fmtDate(addDays(d.date || today(), cubaDays(d.method)))} (unos ${cubaDays(d.method)} días).` })}
         ${tf('Nota (opcional)', inp('note', d.note, 'placeholder="Ej. 3 cajas, guía 12345"'))}
-        <p class="hint">${icon('info')} Hasta que pongas lo que pagaste, el envío no se descuenta de la cuenta y la ganancia se calcula con el costo estimado.</p>
+        <p class="hint">${icon('info')} Hasta que pongas lo que pagaste, el envío no se descuenta de la cuenta y el vuelo se calcula con nuestra tarifa.</p>
       </div>`;
     },
     afterBind: (pg, k) => {
       if (k.startsWith('sel.') || k === 'date') return pg.render();
       if (k === 'weight' || k === 'cost') {
         const list = candidates().filter((x) => d.sel[key(x.o, x.idx)]);
-        $('[data-real]', pg.body).innerHTML = realHelp(d, list.reduce((a, x) => a + x.lb, 0), chargedFor(list));
+        $('[data-real]', pg.body).innerHTML = realHelp(d, list.reduce((a, x) => a + x.lb, 0), chargedFor(list), estFor(list));
       }
     },
     acts: {
@@ -179,13 +179,16 @@ export function flightEditor(id = null, opts = {}) {
 /** Lo que se cobra a los clientes por las libras de esos productos (con el precio por libra de cada encargo). */
 const chargedFor = (list) => round2(list.reduce((a, x) => a + itemShares(x.o)[x.idx].weightCharge, 0));
 
-function realHelp(d, declared, charged) {
+/** Lo que nos cuestan esas libras a nuestra tarifa (libras × costo por libra de cada encargo). */
+const estFor = (list) => round2(list.reduce((a, x) => a + itemShares(x.o)[x.idx].ship, 0));
+
+function realHelp(d, declared, charged, est) {
   const w = num(d.weight);
   const c = num(d.cost);
   const parts = [];
-  if (w && declared) parts.push(`${w >= declared ? `+${lbs(w - declared)}` : `−${lbs(declared - w)}`} sobre el peso de los productos (cajas, embalaje…)`);
-  if (c && declared) parts.push(`<b>${usd(c)} ÷ ${lbs(declared)} de productos = ${usd(c / declared)} por libra</b> (lo que paga cada libra de los encargos, cajas incluidas)`);
-  if (c) parts.push(`<b class="${charged - c < 0 ? 'red-t' : 'green-t'}">Se cobra por las libras − envío pagado: ${usd(charged)} − ${usd(c)} = ${usd(charged - c)}</b>`);
+  if (w && declared) parts.push(`${w >= declared ? `+${lbs(w - declared)}` : `−${lbs(declared - w)}`} sobre las libras de los productos (cajas, embalaje…)`);
+  if (c) parts.push(`<b class="${charged - c < 0 ? 'red-t' : 'green-t'}">Cobrado por las libras − pagado por el vuelo: ${usd(charged)} − ${usd(c)} = ${usd(charged - c)}</b>`);
+  if (c) parts.push(`A nuestra tarifa eran ${usd(est)}: ${est - c >= 0 ? `pagaste ${usd(est - c)} menos` : `pagaste ${usd(c - est)} más`}`);
   return parts.join(' · ') || 'Lo que pesó todo el envío (con cajas) y lo que pagaste por él. Puedes ponerlo ahora o cuando lo sepas.';
 }
 
@@ -214,39 +217,38 @@ export function flightDetail(id) {
         </div>
         ${!c.hasCost ? `<button class="btn filled block lg" data-act="edit">${icon('scale')} Poner peso y precio del envío</button>` : ''}
         ${!f.arrived ? `<button class="btn ${c.hasCost ? 'filled' : 'tonal'} block" data-act="arrive">${icon('pin')} Llegó a Cuba</button>` : ''}
-        ${secTitle('Ganancia de esta vuelta')}
+        ${secTitle('Libras del vuelo')}
         <div class="card">
-          ${kv('Se cobra por todo lo que lleva', usd(c.revenue))}
-          ${kv('− Precio de los productos', usd(c.products))}
-          ${kv(`− Envío ${c.hasCost ? 'pagado' : 'estimado'}`, usd(c.cost))}
-          <div class="divider"></div>
-          ${kv('= Ganancia prevista', usd(c.profit), c.profit >= 0 ? 'green big' : 'red big')}
-          ${kv(`Ya hecha (${c.doneOrders.length} de ${c.orders.length} encargos entregados)`, usd(c.doneProfit), c.doneProfit >= 0 ? 'green strong' : 'red strong')}
-          ${kv('Cobrado de esos encargos hasta ahora', usd(c.collected), 'dim')}
-        </div>
-        ${secTitle('Peso y envío')}
-        <div class="card">
-          ${kv('Peso de los productos (lo que pagan los clientes)', lbs(c.lbs))}
+          ${kv('Libras registradas de los productos', lbs(c.lbs))}
           ${num(f.weight) ? kv('Peso real del envío (con cajas)', lbs(f.weight)) : ''}
           ${c.extraLb !== null ? kv('Diferencia (cajas, embalaje…)', `${c.extraLb >= 0 ? '+' : '−'}${lbs(Math.abs(c.extraLb))}`, 'dim') : ''}
           <div class="divider"></div>
-          ${kv(`Se cobra por las libras${c.lbPrices.length === 1 ? `: ${lbs(c.lbs)} × ${usd(c.lbPrices[0])}/lb` : ' (precio por libra de cada encargo)'}`, usd(c.weightCharge))}
-          ${kv(`− Envío ${c.hasCost ? `pagado con ${ACC_SHORT[f.paidFrom || 'tarjeta'].toLowerCase()}` : 'estimado'}`, usd(c.cost))}
-          ${kv('= Ganancia en las libras', usd(c.weightCharge - c.cost), c.weightCharge - c.cost >= 0 ? 'green strong' : 'red strong')}
-          ${c.perLb ? `<div class="divider"></div>
-          ${kv(`Costo por libra de producto: ${usd(c.cost)} ÷ ${lbs(c.lbs)}`, `${usd(c.perLb)}/lb`, 'strong')}
-          ${c.perRealLb ? kv(`Costo por libra real del vuelo: ${usd(c.cost)} ÷ ${lbs(f.weight)}`, `${usd(c.perRealLb)}/lb`, 'dim') : ''}` : ''}
+          ${kv(`Cobrado por las libras${c.lbPrices.length === 1 ? `: ${lbs(c.lbs)} × ${usd(c.lbPrices[0])}/lb` : ' (precio por libra de cada encargo)'}`, usd(c.weightCharge))}
+          ${kv(c.hasCost ? `− Pagado por todo el vuelo (${ACC_SHORT[f.paidFrom || 'tarjeta'].toLowerCase()})` : '− Envío a nuestra tarifa (falta el precio real)', usd(c.cost))}
+          ${kv(`= Ganancia en las libras: ${usd(c.weightCharge)} − ${usd(c.cost)}`, usd(c.lbProfit), c.lbProfit >= 0 ? 'green strong' : 'red strong')}
+          ${c.hasCost ? `<div class="divider"></div>
+          ${kv(`A nuestra tarifa${c.lbCosts.length === 1 ? `: ${lbs(c.lbs)} × ${usd(c.lbCosts[0])}/lb` : ''}`, usd(c.estimated), 'dim')}
+          ${kv(c.diff >= 0 ? 'Pagaste menos que la tarifa' : 'Pagaste más que la tarifa', usd(Math.abs(c.diff)), c.diff >= 0 ? 'green' : 'red')}` : ''}
         </div>
-        ${c.perLb ? `<p class="hint">${icon('info')} Cada producto paga sus libras × <b>${usd(c.perLb)}</b>: así el precio de las cajas y el embalaje queda repartido y la suma es justo lo que pagaste.</p>` : ''}
+        ${secTitle('Ganancia de esta vuelta')}
+        <div class="card">
+          ${kv('Cobrado a todos los clientes (con peso y precio acordado)', usd(c.revenue))}
+          ${kv('− Precio de todos los productos', usd(c.products))}
+          ${kv(c.hasCost ? '− Pagado por el vuelo' : '− Envío a nuestra tarifa', usd(c.cost))}
+          <div class="divider"></div>
+          ${kv(c.doneOrders.length === c.orders.length ? '= Ganancia del vuelo' : '= Ganancia prevista del vuelo', usd(c.profit), c.profit >= 0 ? 'green big' : 'red big')}
+          ${kv(`Ya hecha (${c.doneOrders.length} de ${c.orders.length} encargos entregados)`, usd(c.doneProfit), c.doneProfit >= 0 ? 'green strong' : 'red strong')}
+          ${kv('Cobrado de esos encargos hasta ahora', usd(c.collected), 'dim')}
+        </div>
         ${secTitle('Encargos')}
         <div class="list">${c.orders.map((o) => {
           const its = c.items.filter((i) => i.o === o);
           const prof = round2(its.reduce((a, i) => a + i.profit, 0));
           const ship = round2(its.reduce((a, i) => a + i.ship, 0));
-          return li({ act: 'order', attrs: `data-id="${o.id}"`, title: esc(clientLabel(o.client)), sub: `${esc(its.map((i) => i.it.desc || 'Producto').join(', '))}${its.length < o.items.length ? ` <span class="dim">(${its.length} de ${o.items.length})</span>` : ''}<br>${lbs(its.reduce((a, i) => a + i.lb, 0))} · envío ${usd(ship)} · ${statusBadge(o.status)}`, right: `<b class="${prof < 0 ? 'red-t' : ''}">${usd(prof)}</b><small>ganancia</small>` });
+          return li({ act: 'order', attrs: `data-id="${o.id}"`, title: esc(clientLabel(o.client)), sub: `${esc(its.map((i) => i.it.desc || 'Producto').join(', '))}${its.length < o.items.length ? ` <span class="dim">(${its.length} de ${o.items.length})</span>` : ''}<br>${lbs(its.reduce((a, i) => a + i.lb, 0))} · envío a tarifa ${usd(ship)} · ${statusBadge(o.status)}`, right: `<b class="${prof < 0 ? 'red-t' : ''}">${usd(prof)}</b><small>ganancia</small>` });
         }).join('')}</div>
         ${f.note ? `<div class="card note-card">${icon('edit')}<span>${esc(f.note)}</span></div>` : ''}
-        <p class="hint">${icon('info')} El precio del envío se reparte entre los productos según sus libras. La ganancia «ya hecha» suma los encargos entregados; la de cada encargo cuenta el día que se entrega.</p>`;
+        <p class="hint">${icon('info')} Cada encargo cuenta su envío a nuestra tarifa (libras × lo que nos cuesta la libra) y su ganancia el día que se entrega. Lo que pagaste de más o de menos por el vuelo cuenta en la ganancia del vuelo el día que sale; por eso «ya hecha» lo incluye.</p>`;
     },
     acts: {
       edit: () => flightEditor(id),

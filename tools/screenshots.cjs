@@ -352,7 +352,7 @@ async function seed(page) {
       await page.waitForTimeout(500);
       await scrollTo('[data-act="pay"]');
       await page.evaluate(() => { const b = [...document.querySelectorAll('.page-wrap.open .page-body')].pop(); b.scrollTop -= 170; });
-      await shot('22c-encargo-costo-real');
+      await shot('22c-encargo-costo');
       await back();
       await back();
       await page.click('.topbar [data-act="flights"]');
