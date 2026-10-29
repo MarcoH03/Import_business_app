@@ -85,8 +85,26 @@ function priceRows(o) {
     ${extraSum ? kv(o.priceOverride !== '' && o.priceOverride != null ? 'Ajuste al precio acordado' : 'Redondeo', usd(extraSum)) : ''}
     <div class="divider"></div>
     ${kv('Precio al cliente', usd(k.total), 'big')}
-    ${kv(`Nuestro costo: producto + envío ${k.shipReal ? `(parte del precio real de ${tripsOf(o).map(tripName).join(', ')})` : k.shipAlloc ? '(parte real del vuelo + estimado)' : `${methodLabel(methodOf(o)).toLowerCase()} ${lbs(k.lb)} × ${usd(o.lbCost)} (estimado)`}`, usd(k.cost), 'dim')}
-    ${kv('Ganancia', usd(k.profit), k.profit < 0 ? 'red strong' : 'green strong')}`;
+    ${kv('− Productos (lo que pagaste)', usd(k.products))}
+    ${costRows(o, k)}
+    <div class="divider"></div>
+    ${kv('= Ganancia', usd(k.profit), k.profit < 0 ? 'red strong' : 'green strong')}`;
+}
+
+/**
+ * Lo que nos cuesta el envío, con la cuenta a la vista: lo que ya salió en un vuelo con precio paga
+ * «libras × costo por libra del vuelo» (precio del vuelo ÷ libras de los productos que lleva, cajas incluidas);
+ * lo demás, «libras × costo estimado por libra».
+ */
+function costRows(o, k) {
+  if (k.shipFixed) return kv('− Envío (costo fijo escrito a mano)', usd(k.shipCost));
+  if (!k.shipParts.length) return kv('− Envío', usd(0));
+  return k.shipParts.map((p) => {
+    const f = p.flight ? flight(p.flight) : null;
+    return f
+      ? kv(`− Envío real (${esc(tripName(f))}): ${lbs(p.lb)} × ${usd(p.rate)}/lb`, usd(p.amount))
+      : kv(`− Envío estimado: ${lbs(p.lb)} × ${usd(p.rate)}/lb`, usd(p.amount), 'dim');
+  }).join('');
 }
 
 /* ======================= formulario ======================= */

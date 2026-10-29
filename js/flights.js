@@ -6,7 +6,7 @@ import { icon } from './icons.js';
 import {
   state, uid, num, round2, usd, lbs, today, addDays, fmtDate, fmtDateLong, ACCOUNTS, ACC_SHORT, METHODS, methodOf, methodLabel,
   flight, tripName, nextFlightNumber, readyItems, flightCalc, syncOrderStatus, nextDeparture, cubaDays, clientLabel, orderTitle,
-  itemLbs, order,
+  itemLbs, order, itemShares,
 } from './store.js';
 import { $, esc, openPage, topPage, dialog, confirmDlg, snackbar, seg, tf, inp, numInp, li, kv, secTitle, emptyState, vibrate } from './ui.js';
 import { commit } from './core.js';
@@ -81,7 +81,7 @@ export function flightEditor(id = null, opts = {}) {
         groups.get(x.o.id).push(x);
       }
       const declared = round2(chosen.reduce((a, x) => a + x.lb, 0));
-      const charged = round2(chosen.reduce((a, x) => a + x.lb * num(x.o.lbPrice), 0));
+      const charged = chargedFor(chosen);
       const est = round2(chosen.reduce((a, x) => a + x.lb * num(x.o.lbCost), 0));
       const nOrders = new Set(chosen.map((x) => x.o.id)).size;
       return `
@@ -101,9 +101,10 @@ export function flightEditor(id = null, opts = {}) {
       <div class="card" data-sum>
         ${kv('Encargos', nOrders)}
         ${kv('Peso de los productos', lbs(declared))}
-        ${kv('Se cobra a los clientes por las libras', usd(charged))}
-        ${kv('Costo estimado (libras × costo)', usd(est), 'dim')}
+        ${kv('Se cobra a los clientes por esas libras', usd(charged))}
+        ${kv('Costo estimado (libras × costo por libra)', usd(est), 'dim')}
       </div>
+      ${chosen.some((x) => !x.lb) ? `<div class="banner amber">${icon('warning')}<span>${chosen.filter((x) => !x.lb).length} producto(s) sin peso: no pagan parte del envío ni se les cobran libras. Pon su peso en el encargo.</span></div>` : ''}
       ${secTitle('Peso y precio reales del envío')}
       <div class="form">
         <div class="row2">
@@ -122,7 +123,7 @@ export function flightEditor(id = null, opts = {}) {
       if (k.startsWith('sel.') || k === 'date') return pg.render();
       if (k === 'weight' || k === 'cost') {
         const list = candidates().filter((x) => d.sel[key(x.o, x.idx)]);
-        $('[data-real]', pg.body).innerHTML = realHelp(d, list.reduce((a, x) => a + x.lb, 0), list.reduce((a, x) => a + x.lb * num(x.o.lbPrice), 0));
+        $('[data-real]', pg.body).innerHTML = realHelp(d, list.reduce((a, x) => a + x.lb, 0), chargedFor(list));
       }
     },
     acts: {
@@ -175,13 +176,16 @@ export function flightEditor(id = null, opts = {}) {
   });
 }
 
+/** Lo que se cobra a los clientes por las libras de esos productos (con el precio por libra de cada encargo). */
+const chargedFor = (list) => round2(list.reduce((a, x) => a + itemShares(x.o)[x.idx].weightCharge, 0));
+
 function realHelp(d, declared, charged) {
   const w = num(d.weight);
   const c = num(d.cost);
   const parts = [];
   if (w && declared) parts.push(`${w >= declared ? `+${lbs(w - declared)}` : `−${lbs(declared - w)}`} sobre el peso de los productos (cajas, embalaje…)`);
-  if (c && w) parts.push(`${usd(c / w)} por libra real`);
-  if (c) parts.push(`<b class="${charged - c < 0 ? 'red-t' : 'green-t'}">Libras cobradas − envío pagado: ${usd(charged - c)}</b>`);
+  if (c && declared) parts.push(`<b>${usd(c)} ÷ ${lbs(declared)} de productos = ${usd(c / declared)} por libra</b> (lo que paga cada libra de los encargos, cajas incluidas)`);
+  if (c) parts.push(`<b class="${charged - c < 0 ? 'red-t' : 'green-t'}">Se cobra por las libras − envío pagado: ${usd(charged)} − ${usd(c)} = ${usd(charged - c)}</b>`);
   return parts.join(' · ') || 'Lo que pesó todo el envío (con cajas) y lo que pagaste por él. Puedes ponerlo ahora o cuando lo sepas.';
 }
 
@@ -222,19 +226,24 @@ export function flightDetail(id) {
         </div>
         ${secTitle('Peso y envío')}
         <div class="card">
-          ${kv('Peso de los productos (lo que paga el cliente)', lbs(c.lbs))}
-          ${num(f.weight) ? kv('Peso real del envío', lbs(f.weight)) : ''}
+          ${kv('Peso de los productos (lo que pagan los clientes)', lbs(c.lbs))}
+          ${num(f.weight) ? kv('Peso real del envío (con cajas)', lbs(f.weight)) : ''}
           ${c.extraLb !== null ? kv('Diferencia (cajas, embalaje…)', `${c.extraLb >= 0 ? '+' : '−'}${lbs(Math.abs(c.extraLb))}`, 'dim') : ''}
-          ${kv('Cobrado por las libras', usd(c.weightCharge))}
-          ${kv(`Envío ${c.hasCost ? `pagado con ${ACC_SHORT[f.paidFrom || 'tarjeta'].toLowerCase()}` : 'estimado'}`, usd(c.cost))}
-          ${c.perLb ? kv('Costo por libra real', usd(c.perLb), 'dim') : ''}
-          ${kv('Libras cobradas − envío', usd(c.weightCharge - c.cost), c.weightCharge - c.cost >= 0 ? 'green strong' : 'red strong')}
+          <div class="divider"></div>
+          ${kv(`Se cobra por las libras${c.lbPrices.length === 1 ? `: ${lbs(c.lbs)} × ${usd(c.lbPrices[0])}/lb` : ' (precio por libra de cada encargo)'}`, usd(c.weightCharge))}
+          ${kv(`− Envío ${c.hasCost ? `pagado con ${ACC_SHORT[f.paidFrom || 'tarjeta'].toLowerCase()}` : 'estimado'}`, usd(c.cost))}
+          ${kv('= Ganancia en las libras', usd(c.weightCharge - c.cost), c.weightCharge - c.cost >= 0 ? 'green strong' : 'red strong')}
+          ${c.perLb ? `<div class="divider"></div>
+          ${kv(`Costo por libra de producto: ${usd(c.cost)} ÷ ${lbs(c.lbs)}`, `${usd(c.perLb)}/lb`, 'strong')}
+          ${c.perRealLb ? kv(`Costo por libra real del vuelo: ${usd(c.cost)} ÷ ${lbs(f.weight)}`, `${usd(c.perRealLb)}/lb`, 'dim') : ''}` : ''}
         </div>
+        ${c.perLb ? `<p class="hint">${icon('info')} Cada producto paga sus libras × <b>${usd(c.perLb)}</b>: así el precio de las cajas y el embalaje queda repartido y la suma es justo lo que pagaste.</p>` : ''}
         ${secTitle('Encargos')}
         <div class="list">${c.orders.map((o) => {
           const its = c.items.filter((i) => i.o === o);
           const prof = round2(its.reduce((a, i) => a + i.profit, 0));
-          return li({ act: 'order', attrs: `data-id="${o.id}"`, title: esc(clientLabel(o.client)), sub: `${esc(its.map((i) => i.it.desc || 'Producto').join(', '))}${its.length < o.items.length ? ` <span class="dim">(${its.length} de ${o.items.length})</span>` : ''}<br>${statusBadge(o.status)}`, right: `<b class="${prof < 0 ? 'red-t' : ''}">${usd(prof)}</b><small>${lbs(its.reduce((a, i) => a + i.lb, 0))}</small>` });
+          const ship = round2(its.reduce((a, i) => a + i.ship, 0));
+          return li({ act: 'order', attrs: `data-id="${o.id}"`, title: esc(clientLabel(o.client)), sub: `${esc(its.map((i) => i.it.desc || 'Producto').join(', '))}${its.length < o.items.length ? ` <span class="dim">(${its.length} de ${o.items.length})</span>` : ''}<br>${lbs(its.reduce((a, i) => a + i.lb, 0))} · envío ${usd(ship)} · ${statusBadge(o.status)}`, right: `<b class="${prof < 0 ? 'red-t' : ''}">${usd(prof)}</b><small>ganancia</small>` });
         }).join('')}</div>
         ${f.note ? `<div class="card note-card">${icon('edit')}<span>${esc(f.note)}</span></div>` : ''}
         <p class="hint">${icon('info')} El precio del envío se reparte entre los productos según sus libras. La ganancia «ya hecha» suma los encargos entregados; la de cada encargo cuenta el día que se entrega.</p>`;

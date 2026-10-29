@@ -69,6 +69,31 @@ ok('envío aéreo y marítimo');
   st.orders.length = 0; st.flights.length = 0; st.workers.length = 0; st.capital.length = 0; S.invalidate();
 }
 ok('productos, vuelos de los jueves, costo real repartido y aportes');
+// Reparto exacto: vuelo de 15.60 USD con 4.9 lb de productos (6.5 lb reales con cajas)
+{
+  const st = S.state;
+  const mk = (id, items, extra = {}) => { const o = S.newOrder({ id, method: 'aereo', lbPrice: 5, lbCost: 2.5, items, ...extra }); for (const it of o.items) { it.arrived = '2026-10-27'; it.flight = 'v9'; } st.orders.push(o); return o; };
+  const a = mk('t', [{ desc: 'Tablet', qty: 1, price: 109.99, w: 2.1 }], { feeOn: true, feePct: 10 });
+  const b = mk('y', [{ desc: 'Crema', qty: 1, price: 21.99, w: 0.6 }, { desc: 'Protector', qty: 2, price: 12.49, w: 0.8 }]);
+  const c = mk('l', [{ desc: 'Conjuntos', qty: 2, price: 14.9, w: 1.4 }, { desc: 'Tenis', qty: 1, price: 16.5, w: 1.1 }]);
+  delete c.items[1].flight; c.items[1].arrived = '';
+  const fl = { id: 'v9', n: 9, method: 'aereo', date: '2026-10-29', weight: 6.5, cost: 15.6, paidFrom: 'tarjeta' };
+  st.flights.push(fl); S.invalidate();
+  const fc = S.flightCalc(fl);
+  assert.equal(round2(fc.perLb), 3.18); assert.equal(round2(fc.perRealLb), 2.4);
+  const shares = [a, b, c].flatMap((o) => S.itemShares(o).filter((_, i) => o.items[i].flight));
+  assert.equal(round2(shares.reduce((x, y) => x + y.ship, 0)), 15.6, 'lo repartido suma justo lo pagado');
+  assert.equal(round2(shares.reduce((x, y) => x + y.profit, 0)), fc.profit, 'las ganancias de los encargos suman la del vuelo');
+  const ka = S.orderCalc(a);
+  assert.equal(ka.shipParts.length, 1); assert.equal(ka.shipParts[0].lb, 2.1); assert.ok(Math.abs(ka.shipParts[0].amount - 2.1 * fc.perLb) < 0.011);
+  assert.equal(ka.profit, round2(ka.total - ka.products - ka.shipCost));
+  // Encargo que salió en parte: una parte real del vuelo y otra estimada
+  const kc = S.orderCalc(c);
+  assert.equal(kc.shipParts.length, 2); assert.equal(kc.shipParts[1].flight, null); assert.equal(kc.shipParts[1].amount, 2.75);
+  assert.equal(fc.weightCharge, 24.5); assert.equal(fc.lbs, 4.9);
+  st.orders.length = 0; st.flights.length = 0; S.invalidate();
+}
+ok('reparto exacto del precio del vuelo y desglose del costo');
 // Lectura de fechas de llegada
 const ref = '2026-10-07';
 assert.equal(S.parseArrival('Arriving Tuesday, October 14', ref), '2026-10-14');

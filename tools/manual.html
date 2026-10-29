@@ -235,7 +235,7 @@
   <span class="formula">Precio = productos + libras × cobro por libra del método + (% del producto, apagado por defecto) + otros cargos</span>
   <p>Y la ganancia del encargo es lo cobrado menos lo que gastaron ustedes:</p>
   <span class="formula">Ganancia = precio − productos − envío</span>
-  <p>Mientras el encargo no ha salido, el envío es un <b>estimado</b>: libras × lo que nos cuesta la libra en ese método. Cuando sale en un vuelo y anotas lo que pagaste por todo el vuelo, se usa su <b>parte del precio real</b> (capítulo 7), que incluye las cajas y el embalaje.</p>
+  <p>Mientras el encargo no ha salido, el envío es un <b>estimado</b>: libras × lo que nos cuesta la libra en ese método. Cuando sale en un vuelo y anotas lo que pagaste por todo el vuelo, se usa su <b>parte del precio real</b>: sus libras × el costo por libra de ese vuelo (precio del vuelo ÷ libras de los productos que lleva), que incluye las cajas y el embalaje (capítulo 7). La ficha del encargo muestra la cuenta completa: precio al cliente − productos − envío = ganancia.</p>
   <table>
     <tr><th>Ejemplo: bocina de 99.95 USD, 2.5 lb, por aéreo (cobro 5 USD/lb, costo 2.50 USD/lb)</th><th class="num">USD</th></tr>
     <tr><td>Productos</td><td class="num">99.95</td></tr>
@@ -310,6 +310,7 @@
       <figure class="ios"><img src="../preview/ios/19b-vuelo-peso-precio.png" alt=""><figcaption><span class="os i">iPhone</span>Peso y precio reales</figcaption></figure>
     </div>
   </div>
+  <div class="tip"><b>Cómo se reparte el precio del vuelo</b>Se divide lo pagado entre las <b>libras de los productos</b> que lleva (no entre el peso real), para que las cajas y el embalaje también se paguen. Ejemplo: vuelo de <b>$15.60</b> con <b>4.9 lb</b> de productos (6.5 lb reales con cajas): $15.60 ÷ 4.9 lb = <b>$3.18 por libra</b>. Una tablet de 2.1 lb paga 2.1 × $3.18 = <b>$6.68</b> de envío, y las partes de todos los productos suman justo $15.60. Si se dividiera entre las 6.5 lb reales ($2.40/lb), las partes sumarían solo $11.76 y faltarían los $3.84 de las cajas. En la ficha de cada encargo se ve la cuenta: «Envío real (Vuelo #9): 2.1 lb × $3.18/lb».</div>
   <h3>La ganancia de cada vuelta</h3>
   <div class="split">
     <div class="txt">
@@ -317,7 +318,7 @@
       <ul>
         <li><b>Ganancia prevista</b>: lo que se cobra por todo lo que lleva − el precio de los productos − lo que pagaste por el envío.</li>
         <li><b>Ya hecha</b>: va subiendo a medida que entregas los encargos de ese vuelo (cuántos de cuántos).</li>
-        <li><b>Peso y envío</b>: el peso de los productos (lo que pagan los clientes), el peso real, la diferencia por cajas y embalaje, lo cobrado por libras, el costo por libra real y «libras cobradas − envío».</li>
+        <li><b>Peso y envío</b>: el peso de los productos (lo que pagan los clientes), el peso real, la diferencia por cajas y embalaje, lo que se cobra por las libras − el envío pagado = la ganancia en las libras, y el <b>costo por libra de producto</b>.</li>
         <li>Los encargos que lleva, con su estado y su ganancia.</li>
       </ul>
       <p>Cuando llega, toca <span class="k">Llegó a Cuba</span>. La lista de todos los vuelos está en Encargos → botón del avión: los que están en camino y los que llegaron, con la ganancia hecha y la prevista.</p>
