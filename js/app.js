@@ -3,7 +3,7 @@ import { icon } from './icons.js';
 import {
   state, local, init, today, fmtDate, fmtDateLong, fmtTime, usd, lbs, pct, num, round2, norm, digits, parseDate, addDays, sum,
   ACCOUNTS, ACC_SHORT, STATUS_LABEL, balance, moneyEntries, pending, upcoming, orderCalc, orderTitle, clientLabel, transitStats,
-  isOpen, METHODS, methodOf, methodLabel, readyItems, nextDeparture, flightCalc, capitalTotals, personCapital, activeRemits, pendingRemits, remitCalc, stats, buckets, periodRange, closureOutdated, APP_VERSION, BIZ, saveLocal,
+  isOpen, METHODS, methodOf, methodLabel, readyItems, nextDeparture, flightCalc, capitalTotals, personCapital, activeRemits, pendingRemits, remitCalc, stats, buckets, periodRange, closureOutdated, APP_VERSION, BIZ, saveLocal, moneyCheck,
 } from './store.js';
 import { $, esc, seg, chips, li, kv, secTitle, emptyState, menuSheet, histPush, histBack, onBackWithoutLayer, openLayers, snackbar, isIOS } from './ui.js';
 import { ctx, onRefresh, refresh, onCommit, shareText } from './core.js';
@@ -11,7 +11,7 @@ import { resetSnapshot, onSyncChange, syncStatus, lastSyncLabel } from './sync.j
 import { orderEditor, orderDetail, orderRow, bulkShipPage, clientsPage, statusBadge, etaLine, departureLabel } from './orders.js';
 import { flightsPage, flightEditor, flightDetail, flightRow } from './flights.js';
 import { remitEditor, remitDetail, remitRow, pendingText } from './remit.js';
-import { expenseEditor, expenseRow, payrollEditor, payrollList, workersPage, accountPage, entryRow, entryActs, ACC_ICON, capitalEditor, capitalList } from './money.js';
+import { expenseEditor, expenseRow, payrollEditor, payrollList, workersPage, accountPage, entryRow, entryActs, ACC_ICON, capitalEditor, capitalList, moneyCheckPage } from './money.js';
 import { closurePage } from './closure.js';
 import { settingsPage, welcomePage, exportBackup, installApp, canInstall, onInstallChange, syncPage, runSync, checkNotifications } from './settings.js';
 
@@ -246,11 +246,14 @@ function viewDinero() {
       ${['tarjeta', 'efectivo'].map((x) => `<button class="money-card" data-act="account" data-v="${x}">${icon(ACC_ICON[x])}<span>${ACCOUNTS[x]}</span><b>${usd(balance(x))}</b></button>`).join('')}
     </div>
     <div class="card">
-      ${kv('Por cobrar a clientes', usd(p.due))}
+      ${kv('Por cobrar a clientes (encargos ya comprados)', usd(p.due))}
+      ${p.over ? kv('Cobrado de más a clientes', usd(p.over), 'dim') : ''}
+      ${p.unboughtN ? kv(`Encargos sin comprar (${p.unboughtN}), no cuentan`, usd(p.unbought), 'dim') : ''}
       ${kv('Remesas por entregar (sale del efectivo)', usd(p.remits))}
       ${p.toReceive ? kv('Transferencias por llegar a la tarjeta', usd(p.toReceive)) : ''}
       ${kv('Envíos a Cuba aún por pagar (aprox.)', usd(p.ship), 'dim')}
     </div>
+    <div class="list">${li({ act: 'moneyCheck', ic: 'scale', color: 'teal', title: 'Cuadre del dinero', sub: 'Lo que hay + lo que te deben − lo aportado = ganancia', right: `<b>${usd(moneyCheck().gain)}</b>` })}</div>
     <div class="pad-h">${seg('dineroMode', [['gastos', 'Gastos'], ['pagos', 'Pagos'], ['aportes', 'Aportes'], ['movs', 'Movim.']], g.mode)}</div>
     ${body}
     <div class="spacer"></div>
@@ -368,6 +371,7 @@ function viewInformes() {
       <div class="divider"></div>
       ${kv('= Ganancia neta de encargos', usd(st.netE), st.netE >= 0 ? 'green big' : 'red big')}
     </div>
+    <p class="hint">${icon('info')} Cada encargo cuenta aquí el día que se entrega. La ganancia de lo ya comprado o cobrado que aún no se entregó está en Dinero → Cuadre del dinero.</p>
     ${secTitle('Remesas')}
     <div class="card">
       ${kv(`Entregado en efectivo (${plural(R.count, 'remesa', 'remesas')})`, usd(R.volume))}
@@ -465,6 +469,7 @@ const acts = {
   syncNow: () => (local.sync.lastError ? syncPage() : runSync({ manual: true })),
   money: () => setTab('dinero'),
   account: (el) => accountPage(el.dataset.v),
+  moneyCheck: () => moneyCheckPage(),
   newOrder: () => orderEditor(),
   newRemit: () => remitEditor(),
   newExpense: () => expenseEditor(),

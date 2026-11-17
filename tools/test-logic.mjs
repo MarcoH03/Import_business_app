@@ -99,6 +99,34 @@ ok('productos, vuelos de los jueves, envío a nuestra tarifa y aportes');
   st.orders.length = 0; st.flights.length = 0; S.invalidate();
 }
 ok('vuelo #9: libras cobradas, pagado y ganancia');
+// Cuadre del dinero: lo que hay + lo que te deben − lo aportado = ganancia, y se explica toda.
+{
+  const st = S.state;
+  st.capital.push({ id: 'k1', date: '2026-10-01', personId: 'p', type: 'aporte', amount: 500, account: 'tarjeta' });
+  const mk = (id, extra) => { const o = S.newOrder({ id, method: 'aereo', lbPrice: 6, lbCost: 2.6, ...extra }); st.orders.push(o); return o; };
+  // Entregado y cobrado: 100 + 1 lb × 6 = 106.
+  const a = mk('a', { items: [{ desc: 'A', qty: 1, price: 100, w: 1, arrived: '2026-10-20', flight: 'q1' }], status: 'entregado', dates: { bought: '2026-10-10', delivered: '2026-10-30' }, payments: [{ id: 'pa', date: '2026-10-30', amount: 106, account: 'efectivo' }] });
+  // Voló, cobrado por adelantado (con precio acordado y un dólar de más), aún sin entregar.
+  const b = mk('b', { items: [{ desc: 'B', qty: 1, price: 50, w: 2, arrived: '2026-10-20', flight: 'q1' }], status: 'cuba', priceOverride: 65, dates: { bought: '2026-10-10' }, payments: [{ id: 'pb', date: '2026-10-15', amount: 66, account: 'tarjeta' }] });
+  // Comprado, sin peso todavía y sin cobrar.
+  mk('c', { items: [{ desc: 'C', qty: 1, price: 30 }], status: 'comprado', dates: { bought: '2026-11-01' } });
+  // Sin comprar: no cuenta como deuda.
+  mk('d', { items: [{ desc: 'D', qty: 1, price: 40 }], status: 'pendiente', dates: {} });
+  st.flights.push({ id: 'q1', n: 1, method: 'aereo', date: '2026-10-22', weight: 3.5, cost: 9, paidFrom: 'tarjeta' });
+  S.invalidate();
+  const p = S.pending();
+  assert.equal(p.due, 30); assert.equal(p.over, 1); assert.equal(p.unbought, 40); assert.equal(p.unboughtN, 1);
+  const m = S.moneyCheck();
+  assert.equal(m.card, round2(500 - 100 - 50 - 30 - 9 + 66)); assert.equal(m.cash, 106);
+  assert.equal(m.business, round2(m.card + m.cash + 30 - 1)); assert.equal(m.capital, 500);
+  // a: 106 − 100 − 2.60 = 3.40 · b: 65 − 50 − 5.20 = 9.80 · vuelo: 7.80 − 9 = −1.20 → 12.00
+  assert.equal(m.parts.delivered, 3.4); assert.equal(m.parts.open, 9.8); assert.equal(m.parts.flights, -1.2);
+  assert.equal(m.gain, 12); assert.equal(m.unexplained, 0);
+  const fc = S.flightCalc(st.flights[0]);
+  assert.equal(fc.profit, 12); assert.equal(round2(fc.doneProfit + fc.openProfit), fc.profit);
+  st.orders.length = 0; st.flights.length = 0; st.capital.length = 0; S.invalidate();
+}
+ok('cuadre del dinero y por cobrar sin los encargos sin comprar');
 // Lectura de fechas de llegada
 const ref = '2026-10-07';
 assert.equal(S.parseArrival('Arriving Tuesday, October 14', ref), '2026-10-14');

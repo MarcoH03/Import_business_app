@@ -238,6 +238,7 @@ export function flightDetail(id) {
           <div class="divider"></div>
           ${kv(c.doneOrders.length === c.orders.length ? '= Ganancia del vuelo' : '= Ganancia prevista del vuelo', usd(c.profit), c.profit >= 0 ? 'green big' : 'red big')}
           ${kv(`Ya hecha (${c.doneOrders.length} de ${c.orders.length} encargos entregados)`, usd(c.doneProfit), c.doneProfit >= 0 ? 'green strong' : 'red strong')}
+          ${c.doneOrders.length < c.orders.length ? kv('+ Falta: encargos aún sin entregar', usd(c.openProfit), c.openProfit < 0 ? 'red' : '') : ''}
           ${kv('Cobrado de esos encargos hasta ahora', usd(c.collected), 'dim')}
         </div>
         ${secTitle('Encargos')}

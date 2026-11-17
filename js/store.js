@@ -2,7 +2,7 @@
 // Todo el dinero se lleva en USD, en dos cuentas: la tarjeta de EE. UU. y el efectivo en Cuba.
 // GitHub solo aloja el código: los datos viven en cada teléfono (y, si se activa, en la sincronización).
 
-export const APP_VERSION = '1.2.2';
+export const APP_VERSION = '1.2.3';
 const DB_NAME = 'import-business';
 const DB_STORE = 'kv';
 const LS_KEY = 'import-business-state';
@@ -444,7 +444,8 @@ export function itemShares(o) {
   return o.items.map((it, i) => {
     const ship = hasVal(o.shipCost) ? num(o.shipCost) * byLb(i) : lbsL[i] * num(o.lbCost);
     const revenue = base[i] + rest * byPrice(i);
-    return { revenue: round2(revenue), product: round2(prices[i]), ship: round2(ship), weightCharge: round2(k.weight * byLb(i)), profit: round2(revenue - prices[i] - ship) };
+    // Sin redondear: se redondea al sumar (si no, los centavos de cada producto descuadran el total del vuelo).
+    return { revenue, product: prices[i], ship, weightCharge: k.weight * byLb(i), profit: revenue - prices[i] - ship };
   });
 }
 
@@ -480,6 +481,8 @@ export function flightCalc(f) {
     doneRevenue: round2(sum(done, (i) => i.revenue)),
     // Ya hecha: la ganancia de los entregados (a nuestra tarifa) más la diferencia del vuelo, que cuenta al pagarlo.
     doneProfit: round2(sum(done, (i) => i.profit) + diff),
+    // Lo que falta: la ganancia de los encargos aún sin entregar (ya cobrada o por cobrar).
+    openProfit: round2(revenue - products - cost - (sum(done, (i) => i.profit) + diff)),
     collected: round2(sum(orders, (o) => Math.min(orderCalc(o).paid, orderCalc(o).total))),
   };
 }
@@ -779,27 +782,86 @@ export function moneyEntries(account, { from = null, to = null, skipClosureOf = 
 }
 export const balance = (account, upTo = null, opts = {}) => round2(sum(moneyEntries(account, { to: upTo, ...opts }), (e) => e.amount));
 
-/** Lo que falta por mover: cobros pendientes, remesas por entregar y envíos por pagar. */
+/**
+ * Lo que falta por mover: cobros pendientes, remesas por entregar y envíos por pagar.
+ * «Por cobrar» cuenta solo encargos ya comprados: si aún no compraste, ni te deben ni has gastado.
+ */
 export function pending() {
   let due = 0;
   let dueN = 0;
   let ship = 0;
+  let over = 0;
+  let prepaid = 0;
+  let unbought = 0;
+  let unboughtN = 0;
   for (const o of state.orders) {
     if (o.status === 'cancelado') continue;
     const k = orderCalc(o);
+    if (!legacyShipped(o)) ship += k.shipEst; // lo que aún no salió en un vuelo con precio
+    if (!reached(o, 'comprado')) {
+      prepaid += k.paid;
+      unbought += k.due;
+      unboughtN++;
+      continue;
+    }
     if (k.due > 0.004) {
       due += k.due;
       dueN++;
-    }
-    if (!legacyShipped(o)) ship += k.shipEst; // lo que aún no salió en un vuelo con precio
+    } else if (k.due < -0.004) over -= k.due;
   }
   const pr = pendingRemits();
   return {
     due: round2(due), dueN,
+    over: round2(over), prepaid: round2(prepaid), unbought: round2(unbought), unboughtN,
     remits: round2(sum(pr, (r) => r.amount)), remitsN: pr.length,
     toReceive: round2(sum(activeRemits().filter((r) => !r.receivedAt), (r) => r.received)),
     ship: round2(ship),
   };
+}
+
+/**
+ * Cuadre del dinero: lo que hay en las cuentas más lo que te deben, menos lo que es de otros,
+ * comparado con lo aportado. Lo que sobra es la ganancia acumulada, y se explica de dónde sale.
+ */
+export function moneyCheck() {
+  const card = balance('tarjeta');
+  const cash = balance('efectivo');
+  const p = pending();
+  const business = round2(card + cash + p.due - p.over - p.prepaid - p.remits + p.toReceive);
+  const put = sum(state.capital.filter((c) => c.type !== 'devolucion'), (c) => c.amount) - sum(state.capital.filter((c) => c.type === 'devolucion'), (c) => c.amount);
+  const ownMoves = sum(state.moves.filter((m) => ['inicial', 'aporte', 'retiro'].includes(m.type)), (m) => m.amount);
+  const capital = round2(put + ownMoves);
+  const P = { delivered: 0, deliveredN: 0, shipOwed: 0, open: 0, openN: 0, cancelled: 0, flights: 0, remits: 0, expenses: 0, payroll: 0, adjust: 0, refunds: 0 };
+  for (const o of state.orders) {
+    const k = orderCalc(o);
+    if (o.status === 'cancelado') {
+      P.cancelled += k.profit;
+      continue;
+    }
+    if (!reached(o, 'comprado')) continue;
+    if (o.refund) P.refunds += num(o.refund.amount);
+    if (o.status === 'entregado') {
+      P.delivered += k.profit;
+      P.deliveredN++;
+      if (!legacyShipped(o)) P.shipOwed += k.shipEst; // su envío a la tarifa todavía no se ha pagado en un vuelo
+    } else {
+      // Comprado y aún sin entregar: lo cobrado o por cobrar − productos − el envío de lo que ya voló (a la tarifa).
+      P.open += k.total - k.products - (legacyShipped(o) ? k.shipCost : k.shipFlown);
+      P.openN++;
+    }
+  }
+  for (const f of state.flights) if (num(f.cost) > 0) P.flights += flightCalc(f).diff;
+  for (const r of activeRemits()) {
+    const k = remitCalc(r);
+    P.remits += k.received - k.amount - (r.deliveredAt ? k.cost : 0);
+  }
+  P.expenses = -sum(state.expenses, (e) => e.amount);
+  P.payroll = -sum(state.payroll, (x) => x.amount);
+  P.adjust = sum(state.moves.filter((m) => m.type === 'ajuste' || m.type === 'cierre'), (m) => m.amount);
+  for (const key of Object.keys(P)) P[key] = round2(P[key]);
+  const gain = round2(business - capital);
+  const explained = round2(P.delivered + P.shipOwed + P.open + P.cancelled + P.flights + P.remits + P.expenses + P.payroll + P.adjust + P.refunds);
+  return { card, cash, ...p, business, capital, gain, parts: P, explained, unexplained: round2(gain - explained) };
 }
 
 /* ======================= periodos y estadísticas ======================= */
