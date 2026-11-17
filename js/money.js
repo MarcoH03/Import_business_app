@@ -3,6 +3,7 @@ import { icon } from './icons.js';
 import {
   state, uid, num, round2, usd, today, fmtDate, fmtTime, fmtDateLong, ACCOUNTS, ACC_SHORT, BIZ, MOVE_TYPES, balance, moneyEntries, worker, workerName, sum,
   PERSON_KINDS, personKind, isWorker, personCapital, capitalTotals, CAPITAL_TYPES,
+  moneyCheck, orderCalc, clientLabel, orderTitle, reached, legacyShipped, STATUS_LABEL,
 } from './store.js';
 import { $, esc, openPage, topPage, confirmDlg, promptDlg, snackbar, seg, chips, tf, inp, numInp, li, kv, secTitle, emptyState, contactBtns } from './ui.js';
 import { commit } from './core.js';
@@ -433,3 +434,65 @@ export function moveEditor(account, type, id = null) {
   }
 }
 
+/* ======================= cuadre del dinero ======================= */
+/** ¿Cuadra el dinero? Lo que hay + lo que te deben − lo que es de otros − lo aportado = ganancia acumulada, y de dónde sale. */
+const short = (t, n = 70) => (t.length > n ? `${t.slice(0, n - 1)}…` : t);
+
+export function moneyCheckPage() {
+  openPage({
+    title: 'Cuadre del dinero',
+    nav: 'back',
+    live: true,
+    render: () => {
+      const m = moneyCheck();
+      const P = m.parts;
+      const sign = (v) => (v < 0 ? 'red' : '');
+      const open = state.orders.filter((o) => o.status !== 'cancelado' && reached(o, 'comprado') && !orderCalc(o).doneDate).map((o) => {
+        const k = orderCalc(o);
+        return { o, k, v: round2(k.total - k.products - (legacyShipped(o) ? k.shipCost : k.shipPaid)) };
+      }).filter((x) => Math.abs(x.v) > 0.004);
+      const unbought = state.orders.filter((o) => o.status !== 'cancelado' && !reached(o, 'comprado'));
+      return `
+        ${secTitle('Dinero del negocio')}
+        <div class="card">
+          ${kv('Tarjeta', usd(m.card))}
+          ${kv('Efectivo', usd(m.cash))}
+          ${kv(`+ Te deben de encargos ya comprados (${m.dueN})`, usd(m.due))}
+          ${m.over ? kv('− Cobrado de más (es del cliente)', usd(m.over)) : ''}
+          ${m.prepaid ? kv('− Cobrado de encargos aún sin comprar', usd(m.prepaid)) : ''}
+          ${m.remits ? kv('− Remesas por entregar', usd(m.remits)) : ''}
+          ${m.toReceive ? kv('+ Transferencias de remesas por llegar', usd(m.toReceive)) : ''}
+          <div class="divider"></div>
+          ${kv('= Dinero del negocio', usd(m.business), 'big')}
+          ${kv('− Aportado (menos lo devuelto)', usd(m.capital))}
+          <div class="divider"></div>
+          ${kv('= Ganancia acumulada', usd(m.gain), m.gain < 0 ? 'red big' : 'green big')}
+        </div>
+        ${m.unboughtN ? `<p class="hint">${icon('info')} No se ${m.unboughtN === 1 ? 'suma el encargo' : `suman los ${m.unboughtN} encargos`} sin comprar (${usd(m.unbought)}): aún no te deben ese dinero ni lo has gastado.</p>` : ''}
+        ${secTitle('De dónde sale la ganancia')}
+        <div class="card">
+          ${kv(`Encargos cobrados (${P.doneN}): cobrado − productos − envío pagado`, usd(P.done), sign(P.done))}
+          ${P.shipOwed ? kv('+ Envío de encargos cobrados que aún no han volado (por pagar)', usd(P.shipOwed)) : ''}
+          ${P.open ? kv('Encargos comprados aún sin cobrar del todo (te deben)', usd(P.open), sign(P.open)) : ''}
+          ${P.cancelled ? kv('Encargos cancelados', usd(P.cancelled), sign(P.cancelled)) : ''}
+          ${P.flights ? kv('Vuelos con precio pero sin libras en sus productos', usd(P.flights), sign(P.flights)) : ''}
+          ${P.remits ? kv('Remesas', usd(P.remits), sign(P.remits)) : ''}
+          ${P.expenses ? kv('− Gastos', usd(-P.expenses)) : ''}
+          ${P.payroll ? kv('− Pagos a trabajadores', usd(-P.payroll)) : ''}
+          ${P.adjust ? kv('Ajustes y diferencias de caja', usd(P.adjust), sign(P.adjust)) : ''}
+          ${P.refunds ? kv('Devoluciones de tiendas', usd(P.refunds)) : ''}
+          <div class="divider"></div>
+          ${kv('= Ganancia acumulada', usd(m.explained), m.explained < 0 ? 'red strong' : 'green strong')}
+          ${Math.abs(m.unexplained) > 0.004 ? kv('Diferencia sin explicar', usd(m.unexplained), 'amber strong') : kv('Diferencia sin explicar', usd(0), 'dim')}
+        </div>
+        ${open.length ? `${secTitle('Comprados y aún sin cobrar del todo')}
+        <div class="list">${open.map((x) => li({ act: 'order', attrs: `data-id="${x.o.id}"`, title: esc(clientLabel(x.o.client)), sub: `${esc(short(orderTitle(x.o)))}<br>${STATUS_LABEL[x.o.status]} · cobrado ${usd(x.k.paid)} de ${usd(x.k.total)}`, right: `<b class="${x.v < 0 ? 'red-t' : 'green-t'}">${usd(x.v)}</b>` })).join('')}</div>
+        <p class="hint">${icon('info')} Su ganancia ya está en «dinero del negocio» porque se suma lo que te deben; Informes la cuenta el día que terminan de pagarte.</p>` : ''}
+        ${unbought.length ? `${secTitle('Sin comprar (no cuentan)')}
+        <div class="list">${unbought.map((o) => li({ act: 'order', attrs: `data-id="${o.id}"`, title: esc(clientLabel(o.client)), sub: esc(short(orderTitle(o))), right: `<b class="dim">${usd(orderCalc(o).total)}</b>` })).join('')}</div>` : ''}`;
+    },
+    acts: {
+      order: (el) => orderDetail(el.dataset.id),
+    },
+  });
+}

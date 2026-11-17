@@ -400,6 +400,10 @@ async function seed(page) {
       await page.waitForTimeout(500);
       await shot('41-cuenta-tarjeta');
       await back();
+      await page.click('[data-act="moneyCheck"]');
+      await page.waitForTimeout(500);
+      await shot('41b-cuadre');
+      await back();
       await page.click(ios ? '.topbar [data-act="dineroAdd"]' : '.fab[data-act="dineroAdd"]');
       await page.waitForTimeout(500);
       await top('[data-act="chip"][data-name="cat"][data-v="Embalaje"]').click();

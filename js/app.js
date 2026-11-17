@@ -3,7 +3,7 @@ import { icon } from './icons.js';
 import {
   state, local, init, today, fmtDate, fmtDateLong, fmtTime, usd, lbs, pct, num, round2, norm, digits, parseDate, addDays, sum,
   ACCOUNTS, ACC_SHORT, STATUS_LABEL, balance, moneyEntries, pending, upcoming, orderCalc, orderTitle, clientLabel, transitStats,
-  isOpen, METHODS, methodOf, methodLabel, readyItems, nextDeparture, flightCalc, capitalTotals, personCapital, activeRemits, pendingRemits, remitCalc, stats, buckets, periodRange, closureOutdated, APP_VERSION, BIZ, saveLocal,
+  isOpen, METHODS, methodOf, methodLabel, readyItems, nextDeparture, flightCalc, capitalTotals, personCapital, activeRemits, pendingRemits, remitCalc, stats, buckets, periodRange, closureOutdated, APP_VERSION, BIZ, saveLocal, moneyCheck,
 } from './store.js';
 import { $, esc, seg, chips, li, kv, secTitle, emptyState, menuSheet, histPush, histBack, onBackWithoutLayer, openLayers, snackbar, isIOS } from './ui.js';
 import { ctx, onRefresh, refresh, onCommit, shareText } from './core.js';
@@ -11,7 +11,7 @@ import { resetSnapshot, onSyncChange, syncStatus, lastSyncLabel } from './sync.j
 import { orderEditor, orderDetail, orderRow, bulkShipPage, clientsPage, statusBadge, etaLine, departureLabel } from './orders.js';
 import { flightsPage, flightEditor, flightDetail, flightRow } from './flights.js';
 import { remitEditor, remitDetail, remitRow, pendingText } from './remit.js';
-import { expenseEditor, expenseRow, payrollEditor, payrollList, workersPage, accountPage, entryRow, entryActs, ACC_ICON, capitalEditor, capitalList } from './money.js';
+import { expenseEditor, expenseRow, payrollEditor, payrollList, workersPage, accountPage, entryRow, entryActs, ACC_ICON, capitalEditor, capitalList, moneyCheckPage } from './money.js';
 import { closurePage } from './closure.js';
 import { settingsPage, welcomePage, exportBackup, installApp, canInstall, onInstallChange, syncPage, runSync, checkNotifications } from './settings.js';
 
@@ -246,11 +246,14 @@ function viewDinero() {
       ${['tarjeta', 'efectivo'].map((x) => `<button class="money-card" data-act="account" data-v="${x}">${icon(ACC_ICON[x])}<span>${ACCOUNTS[x]}</span><b>${usd(balance(x))}</b></button>`).join('')}
     </div>
     <div class="card">
-      ${kv('Por cobrar a clientes', usd(p.due))}
+      ${kv('Por cobrar a clientes (encargos ya comprados)', usd(p.due))}
+      ${p.over ? kv('Cobrado de más a clientes', usd(p.over), 'dim') : ''}
+      ${p.unboughtN ? kv(`Encargos sin comprar (${p.unboughtN}), no cuentan`, usd(p.unbought), 'dim') : ''}
       ${kv('Remesas por entregar (sale del efectivo)', usd(p.remits))}
       ${p.toReceive ? kv('Transferencias por llegar a la tarjeta', usd(p.toReceive)) : ''}
       ${kv('Envíos a Cuba aún por pagar (aprox.)', usd(p.ship), 'dim')}
     </div>
+    <div class="list">${li({ act: 'moneyCheck', ic: 'scale', color: 'teal', title: 'Cuadre del dinero', sub: 'Lo que hay + lo que te deben − lo aportado = ganancia', right: `<b>${usd(moneyCheck().gain)}</b>` })}</div>
     <div class="pad-h">${seg('dineroMode', [['gastos', 'Gastos'], ['pagos', 'Pagos'], ['aportes', 'Aportes'], ['movs', 'Movim.']], g.mode)}</div>
     ${body}
     <div class="spacer"></div>
@@ -340,7 +343,7 @@ function viewInformes() {
     </div>
     <div class="kpis">
       <div class="kpi hero-kpi ${st.net < 0 ? 'neg' : ''}"><span>Ganancia neta de los dos negocios</span><b>${usd(st.net)}</b></div>
-      <div class="kpi"><span>Encargos</span><b class="${st.netE < 0 ? 'red-t' : ''}">${usd(st.netE)}</b><small class="dim">${plural(E.count, 'entregado', 'entregados')}</small></div>
+      <div class="kpi"><span>Encargos</span><b class="${st.netE < 0 ? 'red-t' : ''}">${usd(st.netE)}</b><small class="dim">${plural(E.count, 'cobrado', 'cobrados')}</small></div>
       <div class="kpi"><span>Remesas</span><b class="${st.netR < 0 ? 'red-t' : ''}">${usd(st.netR)}</b><small class="dim">${plural(R.count, 'entregada', 'entregadas')}</small></div>
       <div class="kpi"><span>Entró en efectivo</span><b>${usd(st.income.efectivo)}</b></div>
       <div class="kpi"><span>Entró en la tarjeta</span><b>${usd(st.income.tarjeta)}</b></div>
@@ -354,10 +357,9 @@ function viewInformes() {
     </div>` : ''}
     ${secTitle('Encargos')}
     <div class="card">
-      ${kv(`Cobrado por ${plural(E.count, 'encargo entregado', 'encargos entregados')}`, usd(E.revenue))}
+      ${kv(`Cobrado por ${plural(E.count, 'encargo', 'encargos')} (con peso y precio acordado)`, usd(E.revenue))}
       ${kv('− Precio de los productos', usd(E.products))}
-      ${kv(`− Envío a nuestra tarifa (${lbs(E.shipLb)})`, usd(E.shipCost))}
-      ${E.flightDiff ? kv(E.flightDiff > 0 ? '+ Vuelos: pagaste menos que la tarifa' : '− Vuelos: pagaste más que la tarifa', usd(Math.abs(E.flightDiff)), E.flightDiff < 0 ? 'red' : '') : ''}
+      ${kv('− Envío (lo pagado en los vuelos)', usd(E.shipCost))}
       ${E.cancelled ? kv(`${plural(E.cancelled, 'cancelado', 'cancelados')}`, usd(E.cancelLoss), E.cancelLoss < 0 ? 'red' : '') : ''}
       ${kv('= Ganancia de los encargos', usd(E.profit), 'strong')}
       ${kv('   de ella: libras / % / otros cargos', `${usd(round2(E.weight - E.shipCost))} / ${usd(E.fee)} / ${usd(E.extras)}`, 'dim')}
@@ -368,6 +370,7 @@ function viewInformes() {
       <div class="divider"></div>
       ${kv('= Ganancia neta de encargos', usd(st.netE), st.netE >= 0 ? 'green big' : 'red big')}
     </div>
+    <p class="hint">${icon('info')} Cada encargo cuenta aquí el día que queda comprado y cobrado del todo, aunque aún no se haya entregado. Su envío es lo que pagaste de verdad por el vuelo en que fue.</p>
     ${secTitle('Remesas')}
     <div class="card">
       ${kv(`Entregado en efectivo (${plural(R.count, 'remesa', 'remesas')})`, usd(R.volume))}
@@ -395,7 +398,7 @@ function viewInformes() {
       const cs = st.flights.map(flightCalc);
       return `${kv(`${plural(st.flights.length, 'envío', 'envíos')} · ${lbs(sum(cs, (c) => c.lbs))} de productos`, `${usd(sum(cs, (c) => c.cost))} pagados`)}
         ${kv('Ganancia prevista de esas vueltas', usd(sum(cs, (c) => c.profit)), 'strong')}
-        ${kv('Ya hecha (encargos entregados)', usd(sum(cs, (c) => c.doneProfit)), 'green strong')}`;
+        ${kv('Ya ganado (encargos cobrados)', usd(sum(cs, (c) => c.doneProfit)), 'green strong')}`;
     })()}</div>
     <div class="list">${st.flights.map(flightRow).join('')}</div>` : ''}
     ${secTitle('Tiempos de llegada (todos los encargos)')}
@@ -465,6 +468,7 @@ const acts = {
   syncNow: () => (local.sync.lastError ? syncPage() : runSync({ manual: true })),
   money: () => setTab('dinero'),
   account: (el) => accountPage(el.dataset.v),
+  moneyCheck: () => moneyCheckPage(),
   newOrder: () => orderEditor(),
   newRemit: () => remitEditor(),
   newExpense: () => expenseEditor(),

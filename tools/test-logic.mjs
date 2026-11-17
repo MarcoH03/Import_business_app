@@ -51,16 +51,25 @@ ok('envío aéreo y marítimo');
   const fc = S.flightCalc(fl);
   assert.equal(fc.lbs, 8); assert.equal(fc.extraLb, 2); assert.equal(fc.cost, 30);
   assert.equal(fc.revenue, S.orderCalc(o1).total + S.orderCalc(o2).total);
-  assert.equal(fc.estimated, 20); assert.equal(fc.diff, -10);
-  assert.equal(fc.profit, round2(fc.revenue - 90 - 30)); assert.equal(fc.doneProfit, -10, 'lo pagado de más cuenta al salir el vuelo');
-  assert.equal(S.stats('2026-10-01', '2026-10-31').E.flightDiff, -10);
+  assert.equal(fc.estimated, 20);
+  assert.equal(fc.profit, round2(fc.revenue - 90 - 30)); assert.equal(fc.doneProfit, 0, 'nadie ha pagado todavía');
+  // Para el dinero, cada encargo lleva lo pagado de verdad por sus libras: 30 ÷ 8 lb.
+  assert.equal(S.orderCalc(o1).shipPaid, 11.25); assert.equal(S.orderCalc(o2).shipPaid, 18.75);
   // Solo el vuelo descuenta el envío de la tarjeta (los productos ya se descontaron al comprarlos).
   const card = S.moneyEntries('tarjeta').filter((e) => e.kind === 'flight');
   assert.equal(card.length, 1); assert.equal(card[0].amount, -30);
   assert.ok(!S.moneyEntries('tarjeta').some((e) => e.label === 'Envío a Cuba'));
-  // Entregar o1: la ganancia de la vuelta va subiendo con lo entregado
+  // Entregar sin cobrar no cuenta; cobrar del todo sí (aunque no se haya entregado).
   o1.status = 'entregado'; o1.dates.delivered = '2026-11-01'; S.invalidate();
-  assert.equal(S.flightCalc(fl).doneProfit, round2(S.orderCalc(o1).profit - 10));
+  assert.equal(S.flightCalc(fl).doneProfit, 0); assert.equal(S.orderCalc(o1).doneDate, null);
+  o1.dates.bought = '2026-10-20'; o2.dates.bought = '2026-10-20';
+  o2.payments = [{ id: 'x2', date: '2026-10-30', amount: S.orderCalc(o2).total, account: 'efectivo' }]; S.invalidate();
+  assert.equal(S.orderCalc(o2).doneDate, '2026-10-30');
+  assert.equal(S.flightCalc(fl).doneProfit, S.orderCalc(o2).profitReal);
+  assert.equal(S.stats('2026-10-01', '2026-10-31').E.profit, S.orderCalc(o2).profitReal);
+  o1.payments = [{ id: 'x1', date: '2026-11-02', amount: S.orderCalc(o1).total, account: 'efectivo' }]; S.invalidate();
+  assert.equal(S.flightCalc(fl).doneProfit, S.flightCalc(fl).profit, 'todo cobrado: ya ganado = ganancia del vuelo');
+  assert.equal(round2(S.stats('2026-10-01', '2026-11-30').E.profit), S.flightCalc(fl).profit);
   // Llega el vuelo: el otro encargo pasa a «en Cuba»
   fl.arrived = '2026-10-31'; S.syncOrderStatus(o2); assert.equal(o2.status, 'cuba'); assert.equal(o2.dates.cuba, '2026-10-31');
   // Aportes de un inversionista
@@ -85,11 +94,13 @@ ok('productos, vuelos de los jueves, envío a nuestra tarifa y aportes');
   const fc = S.flightCalc(fl);
   // Libras del vuelo: registradas, cobradas y lo que de verdad se pagó.
   assert.equal(fc.lbs, 4.9); assert.equal(fc.weightCharge, 24.5); assert.equal(fc.cost, 15.6); assert.equal(fc.lbProfit, 8.9);
-  assert.equal(fc.estimated, 12.25); assert.equal(fc.diff, -3.35);
+  assert.equal(fc.paidOver, 35.5, 'lo pagado por encima de los productos incluye el 10% de la tablet');
+  assert.equal(fc.estimated, 12.25);
   // Ganancia total: lo cobrado a todos (con peso y precio acordado) − productos − lo pagado por el vuelo.
   assert.equal(fc.revenue, 222.26); assert.equal(fc.products, 186.76); assert.equal(fc.profit, 19.9);
   const shares = [a, b, c].flatMap((o) => S.itemShares(o).filter((_, i) => o.items[i].flight));
-  assert.equal(round2(shares.reduce((x, y) => x + y.profit, 0) + fc.diff), fc.profit, 'ganancia de los encargos + diferencia del vuelo = ganancia del vuelo');
+  assert.equal(round2(fc.items.reduce((x, y) => x + y.net, 0)), fc.profit, 'la ganancia de los productos con lo pagado de verdad suma la del vuelo');
+  assert.equal(shares.length, 4);
   // Tablet: 109.99 + 2.1 lb × 2.50 = 115.24 de costo; se cobró 131.49.
   const ka = S.orderCalc(a);
   assert.equal(ka.total, 131.49); assert.equal(ka.shipCost, 5.25); assert.equal(ka.cost, 115.24); assert.equal(ka.profit, 16.25);
@@ -99,6 +110,35 @@ ok('productos, vuelos de los jueves, envío a nuestra tarifa y aportes');
   st.orders.length = 0; st.flights.length = 0; S.invalidate();
 }
 ok('vuelo #9: libras cobradas, pagado y ganancia');
+// Cuadre del dinero: lo que hay + lo que te deben − lo aportado = ganancia, y se explica toda.
+{
+  const st = S.state;
+  st.capital.push({ id: 'k1', date: '2026-10-01', personId: 'p', type: 'aporte', amount: 500, account: 'tarjeta' });
+  const mk = (id, extra) => { const o = S.newOrder({ id, method: 'aereo', lbPrice: 6, lbCost: 2.6, ...extra }); st.orders.push(o); return o; };
+  // Entregado y cobrado: 100 + 1 lb × 6 = 106.
+  const a = mk('a', { items: [{ desc: 'A', qty: 1, price: 100, w: 1, arrived: '2026-10-20', flight: 'q1' }], status: 'entregado', dates: { bought: '2026-10-10', delivered: '2026-10-30' }, payments: [{ id: 'pa', date: '2026-10-30', amount: 106, account: 'efectivo' }] });
+  // Voló, cobrado por adelantado (con precio acordado y un dólar de más), aún sin entregar.
+  const b = mk('b', { items: [{ desc: 'B', qty: 1, price: 50, w: 2, arrived: '2026-10-20', flight: 'q1' }], status: 'cuba', priceOverride: 65, dates: { bought: '2026-10-10' }, payments: [{ id: 'pb', date: '2026-10-15', amount: 66, account: 'tarjeta' }] });
+  // Comprado, sin peso todavía y sin cobrar.
+  mk('c', { items: [{ desc: 'C', qty: 1, price: 30 }], status: 'comprado', dates: { bought: '2026-11-01' } });
+  // Sin comprar: no cuenta como deuda.
+  mk('d', { items: [{ desc: 'D', qty: 1, price: 40 }], status: 'pendiente', dates: {} });
+  st.flights.push({ id: 'q1', n: 1, method: 'aereo', date: '2026-10-22', weight: 3.5, cost: 9, paidFrom: 'tarjeta' });
+  S.invalidate();
+  const p = S.pending();
+  assert.equal(p.due, 30); assert.equal(p.over, 1); assert.equal(p.unbought, 40); assert.equal(p.unboughtN, 1);
+  const m = S.moneyCheck();
+  assert.equal(m.card, round2(500 - 100 - 50 - 30 - 9 + 66)); assert.equal(m.cash, 106);
+  assert.equal(m.business, round2(m.card + m.cash + 30 - 1)); assert.equal(m.capital, 500);
+  // a: 106 − 100 − 2.60 = 3.40 · b: 65 − 50 − 5.20 = 9.80 · vuelo: 7.80 − 9 = −1.20 → 12.00
+  // a cobrado: 106 − 100 − 1 lb × (9 ÷ 3 lb) = 3 · b también cobrado (66 ≥ 65): 65 − 50 − 6 = 9 → 12
+  assert.equal(m.parts.done, 12); assert.equal(m.parts.open, 0); assert.equal(m.parts.doneN, 2);
+  assert.equal(m.gain, 12); assert.equal(m.unexplained, 0);
+  const fc = S.flightCalc(st.flights[0]);
+  assert.equal(fc.profit, 12); assert.equal(round2(fc.doneProfit + fc.openProfit), fc.profit);
+  st.orders.length = 0; st.flights.length = 0; st.capital.length = 0; S.invalidate();
+}
+ok('cuadre del dinero y por cobrar sin los encargos sin comprar');
 // Lectura de fechas de llegada
 const ref = '2026-10-07';
 assert.equal(S.parseArrival('Arriving Tuesday, October 14', ref), '2026-10-14');
