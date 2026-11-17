@@ -24,7 +24,7 @@ export function closureText(d, counted = '', note = '') {
   L.push(fmtDateLong(d.date));
   L.push('');
   L.push(`📈 *Ganancia neta: ${usd(st.net)}*`);
-  L.push(`  • Encargos: ${usd(st.netE)}${st.E.count ? ` (${n(st.E.count, 'entregado', 'entregados')})` : ''}`);
+  L.push(`  • Encargos: ${usd(st.netE)}${st.E.count ? ` (${n(st.E.count, 'cobrado', 'cobrados')})` : ''}`);
   L.push(`  • Remesas: ${usd(st.netR)}${st.R.count ? ` (${n(st.R.count, 'entregada', 'entregadas')}, ${usd(st.R.volume)})` : ''}`);
   if (st.expenses) L.push(`  Gastos: −${usd(st.expenses)}`);
   if (st.payroll) L.push(`  Trabajadores: −${usd(st.payroll)}`);
@@ -106,7 +106,7 @@ export function closurePage(date = today()) {
         ${s ? (closureOutdated(d.date) ? `<div class="banner amber">${icon('warning')}<span>Hubo cambios después del cierre de las ${fmtTime(s.ts)}. Vuelve a guardarlo.</span></div>` : `<div class="banner green">${icon('checkCircle')}<span>Cierre guardado a las ${fmtTime(s.ts)}${s.by ? ` por ${esc(s.by)}` : ''}.</span></div>`) : ''}
         <div class="kpis">
           <div class="kpi hero-kpi ${st.net < 0 ? 'neg' : ''}"><span>Ganancia neta del día</span><b>${usd(st.net)}</b></div>
-          <div class="kpi"><span>Encargos</span><b class="${st.netE < 0 ? 'red-t' : ''}">${usd(st.netE)}</b><small class="dim">${n(st.E.count, 'entregado', 'entregados')}</small></div>
+          <div class="kpi"><span>Encargos</span><b class="${st.netE < 0 ? 'red-t' : ''}">${usd(st.netE)}</b><small class="dim">${n(st.E.count, 'cobrado', 'cobrados')}</small></div>
           <div class="kpi"><span>Remesas</span><b class="${st.netR < 0 ? 'red-t' : ''}">${usd(st.netR)}</b><small class="dim">${n(st.R.count, 'entregada', 'entregadas')}</small></div>
         </div>
         ${secTitle('Ingresos del día')}
@@ -124,7 +124,7 @@ export function closurePage(date = today()) {
           ${c.flightsIn.map((f) => li({ act: 'flight', attrs: `data-id="${f.id}"`, ic: 'pin', color: 'green', title: `Llegó a Cuba el ${esc(tripName(f))}`, sub: n(flightCalc(f).orders.length, 'encargo', 'encargos') })).join('')}
           ${!c.flights.length ? evRow('plane', 'teal', 'Enviados a Cuba', c.events.shipped) : ''}
           ${evRow('pin', 'green', 'Llegaron a Cuba', c.events.cuba)}
-          ${evRow('checkCircle', 'green', 'Entregados', c.events.delivered, usd(st.E.revenue))}
+          ${evRow('checkCircle', 'green', 'Entregados', c.events.delivered, usd(c.events.delivered.reduce((a, o) => a + orderCalc(o).total, 0)))}
           ${li({ ic: 'send', color: 'teal', title: 'Remesas', sub: `${n(c.remitsIn.length, 'transferencia recibida', 'transferencias recibidas')} · ${n(c.remitsOut.length, 'entregada', 'entregadas')}`, right: c.remitsOut.length ? usd(c.remitsOut.reduce((a, r) => a + num(r.amount), 0)) : '' })}
         </div>
         ${secTitle('Efectivo en Cuba')}

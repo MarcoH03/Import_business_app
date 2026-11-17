@@ -343,7 +343,7 @@ function viewInformes() {
     </div>
     <div class="kpis">
       <div class="kpi hero-kpi ${st.net < 0 ? 'neg' : ''}"><span>Ganancia neta de los dos negocios</span><b>${usd(st.net)}</b></div>
-      <div class="kpi"><span>Encargos</span><b class="${st.netE < 0 ? 'red-t' : ''}">${usd(st.netE)}</b><small class="dim">${plural(E.count, 'entregado', 'entregados')}</small></div>
+      <div class="kpi"><span>Encargos</span><b class="${st.netE < 0 ? 'red-t' : ''}">${usd(st.netE)}</b><small class="dim">${plural(E.count, 'cobrado', 'cobrados')}</small></div>
       <div class="kpi"><span>Remesas</span><b class="${st.netR < 0 ? 'red-t' : ''}">${usd(st.netR)}</b><small class="dim">${plural(R.count, 'entregada', 'entregadas')}</small></div>
       <div class="kpi"><span>Entró en efectivo</span><b>${usd(st.income.efectivo)}</b></div>
       <div class="kpi"><span>Entró en la tarjeta</span><b>${usd(st.income.tarjeta)}</b></div>
@@ -357,10 +357,9 @@ function viewInformes() {
     </div>` : ''}
     ${secTitle('Encargos')}
     <div class="card">
-      ${kv(`Cobrado por ${plural(E.count, 'encargo entregado', 'encargos entregados')}`, usd(E.revenue))}
+      ${kv(`Cobrado por ${plural(E.count, 'encargo', 'encargos')} (con peso y precio acordado)`, usd(E.revenue))}
       ${kv('− Precio de los productos', usd(E.products))}
-      ${kv(`− Envío a nuestra tarifa (${lbs(E.shipLb)})`, usd(E.shipCost))}
-      ${E.flightDiff ? kv(E.flightDiff > 0 ? '+ Vuelos: pagaste menos que la tarifa' : '− Vuelos: pagaste más que la tarifa', usd(Math.abs(E.flightDiff)), E.flightDiff < 0 ? 'red' : '') : ''}
+      ${kv('− Envío (lo pagado en los vuelos)', usd(E.shipCost))}
       ${E.cancelled ? kv(`${plural(E.cancelled, 'cancelado', 'cancelados')}`, usd(E.cancelLoss), E.cancelLoss < 0 ? 'red' : '') : ''}
       ${kv('= Ganancia de los encargos', usd(E.profit), 'strong')}
       ${kv('   de ella: libras / % / otros cargos', `${usd(round2(E.weight - E.shipCost))} / ${usd(E.fee)} / ${usd(E.extras)}`, 'dim')}
@@ -371,7 +370,7 @@ function viewInformes() {
       <div class="divider"></div>
       ${kv('= Ganancia neta de encargos', usd(st.netE), st.netE >= 0 ? 'green big' : 'red big')}
     </div>
-    <p class="hint">${icon('info')} Cada encargo cuenta aquí el día que se entrega. La ganancia de lo ya comprado o cobrado que aún no se entregó está en Dinero → Cuadre del dinero.</p>
+    <p class="hint">${icon('info')} Cada encargo cuenta aquí el día que queda comprado y cobrado del todo, aunque aún no se haya entregado. Su envío es lo que pagaste de verdad por el vuelo en que fue.</p>
     ${secTitle('Remesas')}
     <div class="card">
       ${kv(`Entregado en efectivo (${plural(R.count, 'remesa', 'remesas')})`, usd(R.volume))}
@@ -399,7 +398,7 @@ function viewInformes() {
       const cs = st.flights.map(flightCalc);
       return `${kv(`${plural(st.flights.length, 'envío', 'envíos')} · ${lbs(sum(cs, (c) => c.lbs))} de productos`, `${usd(sum(cs, (c) => c.cost))} pagados`)}
         ${kv('Ganancia prevista de esas vueltas', usd(sum(cs, (c) => c.profit)), 'strong')}
-        ${kv('Ya hecha (encargos entregados)', usd(sum(cs, (c) => c.doneProfit)), 'green strong')}`;
+        ${kv('Ya ganado (encargos cobrados)', usd(sum(cs, (c) => c.doneProfit)), 'green strong')}`;
     })()}</div>
     <div class="list">${st.flights.map(flightRow).join('')}</div>` : ''}
     ${secTitle('Tiempos de llegada (todos los encargos)')}

@@ -447,9 +447,9 @@ export function moneyCheckPage() {
       const m = moneyCheck();
       const P = m.parts;
       const sign = (v) => (v < 0 ? 'red' : '');
-      const open = state.orders.filter((o) => o.status !== 'cancelado' && o.status !== 'entregado' && reached(o, 'comprado')).map((o) => {
+      const open = state.orders.filter((o) => o.status !== 'cancelado' && reached(o, 'comprado') && !orderCalc(o).doneDate).map((o) => {
         const k = orderCalc(o);
-        return { o, k, v: round2(k.total - k.products - (legacyShipped(o) ? k.shipCost : k.shipFlown)) };
+        return { o, k, v: round2(k.total - k.products - (legacyShipped(o) ? k.shipCost : k.shipPaid)) };
       }).filter((x) => Math.abs(x.v) > 0.004);
       const unbought = state.orders.filter((o) => o.status !== 'cancelado' && !reached(o, 'comprado'));
       return `
@@ -471,11 +471,11 @@ export function moneyCheckPage() {
         ${m.unboughtN ? `<p class="hint">${icon('info')} No se ${m.unboughtN === 1 ? 'suma el encargo' : `suman los ${m.unboughtN} encargos`} sin comprar (${usd(m.unbought)}): aún no te deben ese dinero ni lo has gastado.</p>` : ''}
         ${secTitle('De dónde sale la ganancia')}
         <div class="card">
-          ${kv(`Encargos entregados (${P.deliveredN}): precio − productos − envío a la tarifa`, usd(P.delivered), sign(P.delivered))}
-          ${P.shipOwed ? kv('+ Envío de entregados que aún no se ha pagado en un vuelo', usd(P.shipOwed)) : ''}
-          ${kv('Encargos comprados aún sin entregar (ya cobrado o por cobrar)', usd(P.open), sign(P.open))}
+          ${kv(`Encargos cobrados (${P.doneN}): cobrado − productos − envío pagado`, usd(P.done), sign(P.done))}
+          ${P.shipOwed ? kv('+ Envío de encargos cobrados que aún no han volado (por pagar)', usd(P.shipOwed)) : ''}
+          ${P.open ? kv('Encargos comprados aún sin cobrar del todo (te deben)', usd(P.open), sign(P.open)) : ''}
           ${P.cancelled ? kv('Encargos cancelados', usd(P.cancelled), sign(P.cancelled)) : ''}
-          ${kv('Vuelos: tarifa − lo pagado de verdad', usd(P.flights), sign(P.flights))}
+          ${P.flights ? kv('Vuelos con precio pero sin libras en sus productos', usd(P.flights), sign(P.flights)) : ''}
           ${P.remits ? kv('Remesas', usd(P.remits), sign(P.remits)) : ''}
           ${P.expenses ? kv('− Gastos', usd(-P.expenses)) : ''}
           ${P.payroll ? kv('− Pagos a trabajadores', usd(-P.payroll)) : ''}
@@ -485,9 +485,9 @@ export function moneyCheckPage() {
           ${kv('= Ganancia acumulada', usd(m.explained), m.explained < 0 ? 'red strong' : 'green strong')}
           ${Math.abs(m.unexplained) > 0.004 ? kv('Diferencia sin explicar', usd(m.unexplained), 'amber strong') : kv('Diferencia sin explicar', usd(0), 'dim')}
         </div>
-        ${open.length ? `${secTitle('Ganancia que aún no aparece en Informes')}
+        ${open.length ? `${secTitle('Comprados y aún sin cobrar del todo')}
         <div class="list">${open.map((x) => li({ act: 'order', attrs: `data-id="${x.o.id}"`, title: esc(clientLabel(x.o.client)), sub: `${esc(short(orderTitle(x.o)))}<br>${STATUS_LABEL[x.o.status]} · cobrado ${usd(x.k.paid)} de ${usd(x.k.total)}`, right: `<b class="${x.v < 0 ? 'red-t' : 'green-t'}">${usd(x.v)}</b>` })).join('')}</div>
-        <p class="hint">${icon('info')} Informes y la ganancia «ya hecha» de cada vuelo cuentan un encargo el día que lo entregas. Estos ya están comprados (y a veces cobrados), así que su ganancia ya está en tu dinero aunque todavía no salga allí.</p>` : ''}
+        <p class="hint">${icon('info')} Su ganancia ya está en «dinero del negocio» porque se suma lo que te deben; Informes la cuenta el día que terminan de pagarte.</p>` : ''}
         ${unbought.length ? `${secTitle('Sin comprar (no cuentan)')}
         <div class="list">${unbought.map((o) => li({ act: 'order', attrs: `data-id="${o.id}"`, title: esc(clientLabel(o.client)), sub: esc(short(orderTitle(o))), right: `<b class="dim">${usd(orderCalc(o).total)}</b>` })).join('')}</div>` : ''}`;
     },

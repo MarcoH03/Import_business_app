@@ -2,7 +2,7 @@
 // Todo el dinero se lleva en USD, en dos cuentas: la tarjeta de EE. UU. y el efectivo en Cuba.
 // GitHub solo aloja el código: los datos viven en cada teléfono (y, si se activa, en la sincronización).
 
-export const APP_VERSION = '1.2.3';
+export const APP_VERSION = '1.2.4';
 const DB_NAME = 'import-business';
 const DB_STORE = 'kv';
 const LS_KEY = 'import-business-state';
@@ -379,7 +379,11 @@ function flightData() {
       }
     });
   }
-  for (const x of map.values()) x.hasCost = num(x.f.cost) > 0;
+  for (const x of map.values()) {
+    x.hasCost = num(x.f.cost) > 0;
+    // Lo pagado por el vuelo entre las libras de sus productos: solo para las cuentas de dinero (Informes y cuadre).
+    x.perLb = x.hasCost && x.lbs > 0 ? num(x.f.cost) / x.lbs : 0;
+  }
   cache = { gen, state, map };
   return map;
 }
@@ -387,6 +391,29 @@ function flightData() {
 function flownPaid(it) {
   const x = it.flight && flightData().get(it.flight);
   return !!(x && x.hasCost);
+}
+const flightPerLb = (it) => flightData().get(it.flight)?.perLb || 0;
+
+/**
+ * Día en que la ganancia de un encargo ya es tuya: cuando ya está comprado y cobrado del todo
+ * (el día del cobro que completó el precio). Si no tiene precio, al entregarlo. Cancelado: el día que se canceló.
+ */
+function doneDate(o, total, due) {
+  const d = o.dates || {};
+  if (o.status === 'cancelado') return d.cancelled || null;
+  if (!reached(o, 'comprado') || due > 0.004) return null;
+  let when = null;
+  let acc = 0;
+  for (const p of [...(o.payments || [])].sort((a, b) => (a.date || '').localeCompare(b.date || ''))) {
+    acc += num(p.amount);
+    if (acc >= total - 0.004) {
+      when = p.date;
+      break;
+    }
+  }
+  if (!when) when = total <= 0.004 ? d.delivered || null : null;
+  if (!when) return null;
+  return d.bought && d.bought > when ? d.bought : when;
 }
 
 /** Todos los importes de un encargo con sus precios guardados (cambiar los ajustes no altera encargos ya hechos). */
@@ -401,30 +428,38 @@ export function orderCalc(o) {
   const step = num(o.roundTotal);
   const auto = step > 0 ? round2(Math.ceil(round2(subtotal / step) - 1e-9) * step) : subtotal;
   const total = hasVal(o.priceOverride) ? round2(num(o.priceOverride)) : auto;
-  // Lo que nos cuesta el envío: las libras de cada producto × nuestra tarifa (la de Ajustes al hacer el encargo).
-  // El precio real de cada vuelo no se reparte entre los encargos: se compara en el vuelo (ver flightCalc).
+  // Lo que nos cuesta el envío en la ficha del encargo: las libras × nuestra tarifa (la de Ajustes al hacer el encargo).
+  // Para las cuentas de dinero (Informes y cuadre) se usa lo pagado de verdad: shipPaid y profitReal.
   const lbsL = itemLbs(o);
   const override = hasVal(o.shipCost);
   const shipLb = override ? 0 : round2(w);
   const shipCost = override ? round2(num(o.shipCost)) : round2(w * num(o.lbCost));
   const shipOf = (i) => (override ? (w > 0 ? shipCost * lbsL[i] / w : shipCost / (o.items.length || 1)) : lbsL[i] * num(o.lbCost));
   let shipFlown = 0;
+  let shipPaid = 0;
   o.items.forEach((it, i) => {
-    if (flownPaid(it)) shipFlown += shipOf(i);
+    if (!flownPaid(it)) return;
+    shipFlown += shipOf(i);
+    shipPaid += lbsL[i] * flightPerLb(it);
   });
   // Lo que aún no salió en un vuelo con precio (sirve para saber cuánto falta por pagar de envío).
   const shipEst = round2(shipCost - shipFlown);
   const cost = round2(products + shipCost);
   const paid = round2(sum(o.payments || [], (p) => p.amount));
   const refund = round2(num(o.refund?.amount));
-  // Lo gastado hasta ahora: el producto si ya se compró y el envío de lo que ya salió (a nuestra tarifa).
-  const spent = round2((reached(o, 'comprado') ? products : 0) + (legacyShipped(o) ? shipCost : shipFlown));
+  // Lo gastado hasta ahora: el producto si ya se compró y lo pagado de verdad por el envío de lo que ya voló.
+  const spent = round2((reached(o, 'comprado') ? products : 0) + (legacyShipped(o) ? shipCost : shipPaid));
   const profit = o.status === 'cancelado' ? round2(paid + refund - spent) : round2(total - cost);
+  // Envío de verdad: lo pagado en los vuelos por lo que ya voló + la tarifa de lo que aún no.
+  const shipReal = legacyShipped(o) ? shipCost : round2(shipPaid + shipEst);
+  const profitReal = o.status === 'cancelado' ? profit : round2(total - products - shipReal);
+  const due = o.status === 'cancelado' ? 0 : round2(total - paid);
   return {
     products, lb: round2(lb), weight, fee, extras, subtotal, auto, total,
-    shipCost, shipLb, shipEst, shipFlown: round2(shipFlown), shipFixed: override,
-    cost, paid, refund, spent, profit,
-    due: o.status === 'cancelado' ? 0 : round2(total - paid),
+    shipCost, shipLb, shipEst, shipFlown: round2(shipFlown), shipPaid: round2(shipPaid), shipReal, shipFixed: override,
+    cost, paid, refund, spent, profit, profitReal,
+    doneDate: doneDate(o, total, due),
+    due,
     units: sum(o.items, (it) => num(it.qty || 1)),
   };
 }
@@ -450,39 +485,38 @@ export function itemShares(o) {
 }
 
 /**
- * Cuentas de un vuelo.
- * - Libras: las registradas de los productos, lo cobrado por ellas y lo que de verdad se pagó por el vuelo.
- * - Ganancia de la vuelta: lo cobrado a todos los clientes (peso y precio acordado incluidos)
- *   − el precio de los productos − lo pagado por el vuelo.
- * Cada encargo cuenta su envío a nuestra tarifa; la diferencia entre eso y lo pagado (diff) es del vuelo.
+ * Cuentas de un vuelo, con el dinero de verdad:
+ * - Libras: las registradas de los productos, lo cobrado por ellas y lo que se pagó por todo el vuelo.
+ * - Ganancia: lo cobrado a todos los clientes (peso y precio acordado incluidos) − los productos − lo pagado por el vuelo.
+ * - Ya ganado: lo mismo pero solo de los encargos ya cobrados (cada uno con lo pagado por sus libras).
  */
 export function flightCalc(f) {
-  const x = flightData().get(f.id) || { items: [], lbs: 0, hasCost: false };
-  const items = x.items.map(({ o, idx, lb }) => ({ o, idx, it: o.items[idx], lb, ...itemShares(o)[idx], delivered: o.status === 'entregado' }));
+  const x = flightData().get(f.id) || { items: [], lbs: 0, hasCost: false, perLb: 0 };
+  const items = x.items.map(({ o, idx, lb }) => {
+    const sh = itemShares(o)[idx];
+    const paid = x.hasCost ? lb * x.perLb : sh.ship;
+    return { o, idx, it: o.items[idx], lb, ...sh, paidShip: paid, net: sh.revenue - sh.product - paid, done: o.status !== 'cancelado' && !!orderCalc(o).doneDate };
+  });
   const orders = [...new Set(items.map((i) => i.o))];
   const revenue = round2(sum(items, (i) => i.revenue));
   const products = round2(sum(items, (i) => i.product));
   const estimated = round2(sum(items, (i) => i.ship));
   const cost = x.hasCost ? round2(num(f.cost)) : estimated;
   const weightCharge = round2(sum(items, (i) => i.weightCharge));
-  const diff = x.hasCost ? round2(estimated - cost) : 0;
-  const done = items.filter((i) => i.delivered);
-  const doneOrders = orders.filter((o) => o.status === 'entregado');
-  const lbCosts = [...new Set(items.filter((i) => !hasVal(i.o.shipCost)).map((i) => num(i.o.lbCost)))];
+  const profit = round2(revenue - products - cost);
+  // Si ningún producto tiene libras, lo pagado no se puede poner a cuenta de ninguno: cuenta todo de una vez.
+  const done = items.filter((i) => i.done);
+  const doneProfit = round2(sum(done, (i) => i.net) - (x.hasCost && !x.lbs ? cost : 0));
+  const doneOrders = orders.filter((o) => o.status !== 'cancelado' && orderCalc(o).doneDate);
   return {
     items, orders, doneOrders,
     lbs: round2(x.lbs), weight: num(f.weight), extraLb: num(f.weight) ? round2(num(f.weight) - x.lbs) : null,
-    hasCost: x.hasCost, cost, estimated, diff,
+    hasCost: x.hasCost, cost, estimated,
     lbPrices: [...new Set(items.map((i) => num(i.o.lbPrice)))],
-    lbCosts,
     revenue, products, weightCharge,
     lbProfit: round2(weightCharge - cost),
-    profit: round2(revenue - products - cost),
+    profit, doneProfit, openProfit: round2(profit - doneProfit),
     doneRevenue: round2(sum(done, (i) => i.revenue)),
-    // Ya hecha: la ganancia de los entregados (a nuestra tarifa) más la diferencia del vuelo, que cuenta al pagarlo.
-    doneProfit: round2(sum(done, (i) => i.profit) + diff),
-    // Lo que falta: la ganancia de los encargos aún sin entregar (ya cobrada o por cobrar).
-    openProfit: round2(revenue - products - cost - (sum(done, (i) => i.profit) + diff)),
     collected: round2(sum(orders, (o) => Math.min(orderCalc(o).paid, orderCalc(o).total))),
   };
 }
@@ -831,7 +865,7 @@ export function moneyCheck() {
   const put = sum(state.capital.filter((c) => c.type !== 'devolucion'), (c) => c.amount) - sum(state.capital.filter((c) => c.type === 'devolucion'), (c) => c.amount);
   const ownMoves = sum(state.moves.filter((m) => ['inicial', 'aporte', 'retiro'].includes(m.type)), (m) => m.amount);
   const capital = round2(put + ownMoves);
-  const P = { delivered: 0, deliveredN: 0, shipOwed: 0, open: 0, openN: 0, cancelled: 0, flights: 0, remits: 0, expenses: 0, payroll: 0, adjust: 0, refunds: 0 };
+  const P = { done: 0, doneN: 0, shipOwed: 0, open: 0, openN: 0, cancelled: 0, flights: 0, remits: 0, expenses: 0, payroll: 0, adjust: 0, refunds: 0 };
   for (const o of state.orders) {
     const k = orderCalc(o);
     if (o.status === 'cancelado') {
@@ -840,17 +874,19 @@ export function moneyCheck() {
     }
     if (!reached(o, 'comprado')) continue;
     if (o.refund) P.refunds += num(o.refund.amount);
-    if (o.status === 'entregado') {
-      P.delivered += k.profit;
-      P.deliveredN++;
-      if (!legacyShipped(o)) P.shipOwed += k.shipEst; // su envío a la tarifa todavía no se ha pagado en un vuelo
+    if (k.doneDate) {
+      // Comprado y cobrado: cobrado − productos − lo pagado de verdad por su envío.
+      P.done += k.profitReal;
+      P.doneN++;
+      if (!legacyShipped(o)) P.shipOwed += k.shipEst; // su envío aún no se ha pagado en un vuelo
     } else {
-      // Comprado y aún sin entregar: lo cobrado o por cobrar − productos − el envío de lo que ya voló (a la tarifa).
-      P.open += k.total - k.products - (legacyShipped(o) ? k.shipCost : k.shipFlown);
+      // Comprado y aún sin cobrar del todo: precio − productos − lo pagado por el envío de lo que ya voló.
+      P.open += k.total - k.products - (legacyShipped(o) ? k.shipCost : k.shipPaid);
       P.openN++;
     }
   }
-  for (const f of state.flights) if (num(f.cost) > 0) P.flights += flightCalc(f).diff;
+  // Vuelos con precio pero sin libras en sus productos: lo pagado no está a cuenta de ningún encargo.
+  for (const x of flightData().values()) if (x.hasCost && !x.lbs) P.flights -= num(x.f.cost);
   for (const r of activeRemits()) {
     const k = remitCalc(r);
     P.remits += k.received - k.amount - (r.deliveredAt ? k.cost : 0);
@@ -860,7 +896,7 @@ export function moneyCheck() {
   P.adjust = sum(state.moves.filter((m) => m.type === 'ajuste' || m.type === 'cierre'), (m) => m.amount);
   for (const key of Object.keys(P)) P[key] = round2(P[key]);
   const gain = round2(business - capital);
-  const explained = round2(P.delivered + P.shipOwed + P.open + P.cancelled + P.flights + P.remits + P.expenses + P.payroll + P.adjust + P.refunds);
+  const explained = round2(P.done + P.shipOwed + P.open + P.cancelled + P.flights + P.remits + P.expenses + P.payroll + P.adjust + P.refunds);
   return { card, cash, ...p, business, capital, gain, parts: P, explained, unexplained: round2(gain - explained) };
 }
 
@@ -902,31 +938,33 @@ function costsByBiz(list) {
 }
 
 /**
- * Resumen de un periodo. Un encargo cuenta su ganancia el día que se entrega (o se cancela);
- * una remesa, el día en que ya se recibió la transferencia y se entregó el efectivo.
+ * Resumen de un periodo. Un encargo cuenta su ganancia el día que ya está comprado y cobrado del todo
+ * (o se cancela), con lo pagado de verdad por su envío; una remesa, el día en que ya se recibió la
+ * transferencia y se entregó el efectivo.
  */
 export function stats(from, to) {
   const inR = (d) => !!d && d >= from && d <= to;
+  const done = state.orders.filter((o) => o.status !== 'cancelado' && inR(orderCalc(o).doneDate));
   const delivered = state.orders.filter((o) => o.status === 'entregado' && inR(o.dates.delivered));
   const cancelled = state.orders.filter((o) => o.status === 'cancelado' && inR(o.dates.cancelled));
-  const E = { count: delivered.length, revenue: 0, products: 0, shipCost: 0, shipLb: 0, flightDiff: 0, weight: 0, fee: 0, extras: 0, profit: 0, lb: 0, cancelled: cancelled.length, cancelLoss: 0 };
+  const E = { count: done.length, revenue: 0, products: 0, shipCost: 0, shipLb: 0, weight: 0, fee: 0, extras: 0, profit: 0, lb: 0, cancelled: cancelled.length, cancelLoss: 0 };
   const byMethod = Object.fromEntries(Object.keys(METHODS).map((m) => [m, { count: 0, lb: 0, weight: 0, shipCost: 0, profit: 0 }]));
-  for (const o of delivered) {
+  for (const o of done) {
     const k = orderCalc(o);
     const bm = byMethod[methodOf(o)];
     bm.count++;
     bm.lb += k.lb;
     bm.weight += k.weight;
-    bm.shipCost += k.shipCost;
-    bm.profit += k.profit;
+    bm.shipCost += k.shipReal;
+    bm.profit += k.profitReal;
     E.revenue += k.total;
     E.products += k.products;
-    E.shipCost += k.shipCost;
+    E.shipCost += k.shipReal;
     E.shipLb += k.shipLb;
     E.weight += k.weight;
     E.fee += k.fee;
     E.extras += k.total - k.products - k.weight - k.fee;
-    E.profit += k.profit;
+    E.profit += k.profitReal;
     E.lb += k.lb;
   }
   for (const o of cancelled) {
@@ -934,10 +972,6 @@ export function stats(from, to) {
     E.cancelLoss += k.profit;
     E.profit += k.profit;
   }
-  // Diferencia entre el envío a nuestra tarifa y lo que de verdad se pagó por cada vuelo (cuenta el día del vuelo).
-  E.flightDiff = 0;
-  for (const f of state.flights) if (inR(f.date) && num(f.cost) > 0) E.flightDiff += flightCalc(f).diff;
-  E.profit += E.flightDiff;
   const remits = activeRemits().filter((r) => inR(remitCalc(r).doneDate));
   const R = { count: remits.length, volume: 0, received: 0, commission: 0, cost: 0, profit: 0 };
   for (const r of remits) {
@@ -983,7 +1017,7 @@ export function stats(from, to) {
     expenseList: expenses, payrollList: payroll,
     byCat: [...byCat.entries()].map(([cat, v]) => ({ cat, v: round2(v) })).sort((a, b) => b.v - a.v),
     income, out,
-    delivered, cancelled, remits,
+    done, delivered, cancelled, remits,
     bought, boughtTotal: round2(sum(bought, (o) => orderCalc(o).products)),
     newRemits: state.remits.filter((r) => !r.cancelled && inR(r.date)),
   };
