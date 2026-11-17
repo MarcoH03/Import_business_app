@@ -182,7 +182,7 @@ function realHelp(d, declared, charged) {
   const c = num(d.cost);
   const parts = [];
   if (w && declared) parts.push(`${w >= declared ? `+${lbs(w - declared)}` : `−${lbs(declared - w)}`} sobre las libras de los productos (cajas, embalaje…)`);
-  if (c) parts.push(`<b class="${charged - c < 0 ? 'red-t' : 'green-t'}">Cobrado por las libras − pagado por el vuelo: ${usd(charged)} − ${usd(c)} = ${usd(charged - c)}</b>`);
+  if (c) parts.push(`<b class="${charged - c < 0 ? 'red-t' : 'green-t'}">Libras según su precio − pagado por el vuelo: ${usd(charged)} − ${usd(c)} = ${usd(charged - c)}</b>`);
   return parts.join(' · ') || 'Lo que pesó todo el envío (con cajas) y lo que pagaste por él. Puedes ponerlo ahora o cuando lo sepas.';
 }
 
@@ -227,9 +227,11 @@ export function flightDetail(id) {
           ${num(f.weight) ? kv('Peso real del envío (con cajas)', lbs(f.weight)) : ''}
           ${c.extraLb !== null ? kv('Diferencia (cajas, embalaje…)', `${c.extraLb >= 0 ? '+' : '−'}${lbs(Math.abs(c.extraLb))}`, 'dim') : ''}
           <div class="divider"></div>
-          ${kv(`Cobrado por las libras${c.lbPrices.length === 1 ? `: ${lbs(c.lbs)} × ${usd(c.lbPrices[0])}/lb` : ' (precio por libra de cada encargo)'}`, usd(c.weightCharge))}
+          ${kv(`Cobrado por las libras según el precio por libra${c.lbPrices.length === 1 ? `: ${lbs(c.lbs)} × ${usd(c.lbPrices[0])}/lb` : ' de cada encargo'}`, usd(c.weightCharge), 'dim')}
+          ${kv('Te pagaron de verdad por encima del precio de los productos', usd(c.paidOver))}
+          ${Math.abs(c.paidOver - c.weightCharge) > 0.004 ? kv('Diferencia con lo calculado (precios acordados, %, otros cargos)', `${c.paidOver - c.weightCharge >= 0 ? '+' : '−'}${usd(Math.abs(c.paidOver - c.weightCharge))}`, 'dim') : ''}
           ${kv(c.hasCost ? '− Pagado por todo el vuelo' : '− Envío estimado', usd(c.cost))}
-          ${kv(`= Ganancia en las libras`, usd(c.lbProfit), c.lbProfit >= 0 ? 'green strong' : 'red strong')}
+          ${kv(`= Ganancia: ${usd(c.paidOver)} − ${usd(c.cost)}`, usd(c.profit), c.profit >= 0 ? 'green strong' : 'red strong')}
         </div>
         ${secTitle('Encargos')}
         <div class="list">${c.orders.map((o) => {

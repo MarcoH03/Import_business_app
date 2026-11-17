@@ -514,6 +514,8 @@ export function flightCalc(f) {
     hasCost: x.hasCost, cost, estimated,
     lbPrices: [...new Set(items.map((i) => num(i.o.lbPrice)))],
     revenue, products, weightCharge,
+    // Lo que de verdad pagaron los clientes por encima del precio de los productos (libras, % y precios acordados).
+    paidOver: round2(revenue - products),
     lbProfit: round2(weightCharge - cost),
     profit, doneProfit, openProfit: round2(profit - doneProfit),
     doneRevenue: round2(sum(done, (i) => i.revenue)),

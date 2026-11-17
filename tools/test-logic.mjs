@@ -94,6 +94,7 @@ ok('productos, vuelos de los jueves, envío a nuestra tarifa y aportes');
   const fc = S.flightCalc(fl);
   // Libras del vuelo: registradas, cobradas y lo que de verdad se pagó.
   assert.equal(fc.lbs, 4.9); assert.equal(fc.weightCharge, 24.5); assert.equal(fc.cost, 15.6); assert.equal(fc.lbProfit, 8.9);
+  assert.equal(fc.paidOver, 35.5, 'lo pagado por encima de los productos incluye el 10% de la tablet');
   assert.equal(fc.estimated, 12.25);
   // Ganancia total: lo cobrado a todos (con peso y precio acordado) − productos − lo pagado por el vuelo.
   assert.equal(fc.revenue, 222.26); assert.equal(fc.products, 186.76); assert.equal(fc.profit, 19.9);
