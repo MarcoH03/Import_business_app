@@ -11,6 +11,12 @@ Web app para el negocio de **encargos de compras por internet con envío a Cuba*
 **Manual de uso (Android y iPhone):** [manual/Manual-Import-Business.pdf](manual/Manual-Import-Business.pdf)
 **Capturas:** [`preview/android/`](preview/android/) y [`preview/ios/`](preview/ios/)
 
+**Versión actual: 1.2.4.** Novedades:
+- **Cuadre del dinero** (en Dinero): lo que hay + lo que te deben − lo aportado = ganancia acumulada, con el desglose de dónde sale.
+- Un encargo cuenta su ganancia cuando ya está comprado y **cobrado del todo**, aunque no se haya entregado.
+- La ganancia de cada vuelo es lo cobrado − los productos − lo pagado de verdad por el vuelo.
+- «Por cobrar» solo cuenta encargos ya comprados.
+
 | Inicio (Android) | Encargos (iPhone) | Encargo (Android) | Remesas (iPhone) | Informes (Android) |
 |---|---|---|---|---|
 | ![](preview/android/01-inicio.png) | ![](preview/ios/10-encargos.png) | ![](preview/android/14-encargo-ficha.png) | ![](preview/ios/30-remesas.png) | ![](preview/android/51-informes-negocios.png) |
